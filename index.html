@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firm Logistics Manager</title>
+    
+    <style>
+        :root { --primary: #2563eb; --bg: #f3f4f6; --white: #ffffff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        /* Tabs */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab { padding: 10px 20px; background: #ddd; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .tab.active { background: var(--primary); color: var(--white); }
+        
+        /* Forms */
+        .card { background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .form-group { display: flex; flex-direction: column; }
+        label { font-size: 0.85rem; color: #555; margin-bottom: 5px; font-weight: 600; }
+        input, select, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        button.submit-btn { background: #10b981; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; margin-top: 20px; width: 100%; }
+        button.submit-btn:hover { background: #059669; }
+
+        /* Table */
+        .table-controls { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; background: white; font-size: 0.9rem; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; cursor: pointer; }
+        tr:hover { background: #f1f5f9; }
+        
+        /* Responsive */
+        @media (max-width: 600px) { .table-controls { flex-direction: column; gap: 10px; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Logistics Management System</h2>
+    
+    <div class="tabs">
+        <button class="tab active" onclick="setMode('INWARD')">INWARD (Purchase)</button>
+        <button class="tab" onclick="setMode('OUTWARD')">OUTWARD (Sales)</button>
+        <button class="tab" onclick="setMode('IN_RET')">INWARD RETURN</button>
+        <button class="tab" onclick="setMode('OUT_RET')">OUTWARD RETURN</button>
+    </div>
+
+    <div class="card">
+        <h3 id="form-title">New Entry</h3>
+        <form id="logForm" onsubmit="submitData(event)">
+            <div class="form-grid" id="dynamic-fields">
+                </div>
+            <button type="submit" class="submit-btn">Save Entry</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="table-controls">
+            <h3>Recent Logs</h3>
+            <input type="text" id="searchInput" placeholder="Search Bill No, Firm, Name..." onkeyup="renderTable()">
+        </div>
+        <div style="overflow-x:auto;">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Firm</th>
+                        <th>Party/Brand</th>
+                        <th>Bill No</th>
+                        <th>Pcs</th>
+                        <th>Amt</th>
+                        <th>User</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    // --- IMPORT FIREBASE ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // --- PASTE YOUR FIREBASE CONFIG HERE ---
+    // Replace the object below with the one you copied from Firebase Console
+    const firebaseConfig = {
+    apiKey: "AIzaSyBBszqQlych7F1g82TA37y6Bvhj6EwFfdg",
+    authDomain: "logistics-app-mona-rnc.firebaseapp.com",
+    projectId: "logistics-app-mona-rnc",
+    storageBucket: "logistics-app-mona-rnc.firebasestorage.app",
+    messagingSenderId: "989428986519",
+    appId: "1:989428986519:web:cdcea9bd1b6aecdb9d2fd2",
+    measurementId: "G-LSP2HCVPKC"
+    };
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // --- DATA LISTS ---
+    const DATA = {
+        firms: ["Mona", "RNC"],
+        sellers: ["Milton", "Apna Bazaar", "Karachu"],
+        brands: ["Jockey", "Amante", "Sweet Dreams"],
+        employees: ["Damu", "Madam", "Mayur"]
+    };
+
+    // --- FORM CONFIGURATION ---
+    const FORMS = {
+        INWARD: [
+            { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
+            { label: "L/R Date", type: "date", key: "date_lr" },
+            { label: "Bill Date", type: "date", key: "date_bill" },
+            { label: "Date Recd", type: "date", key: "date_recd" },
+            { label: "Seller", type: "select", options: DATA.sellers, key: "party" },
+            { label: "Bill No", type: "text", key: "bill_no" },
+            { label: "Pieces", type: "number", key: "pcs" },
+            { label: "Amount", type: "number", key: "amount" },
+            { label: "Recd By", type: "select", options: DATA.employees, key: "recd_by" },
+            { label: "Checked By", type: "select", options: DATA.employees, key: "checked_by" },
+            { label: "Remark", type: "text", key: "remark" }
+        ],
+        OUTWARD: [
+            { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
+            { label: "Bill Date", type: "date", key: "date_bill" },
+            { label: "Delivery Date", type: "date", key: "date_deliv" },
+            { label: "Purchaser/Cust", type: "text", key: "party" },
+            { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
+            { label: "Bill No", type: "text", key: "bill_no" },
+            { label: "Pieces", type: "number", key: "pcs" },
+            { label: "Amount", type: "number", key: "amount" },
+            { label: "Deliv Person", type: "select", options: DATA.employees, key: "deliv_by" },
+            { label: "Bill Made By", type: "select", options: DATA.employees, key: "made_by" },
+            { label: "Checked By", type: "select", options: DATA.employees, key: "checked_by" },
+            { label: "Remark", type: "text", key: "remark" }
+        ],
+        IN_RET: [
+            { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
+            { label: "Return Date", type: "date", key: "date_main" },
+            { label: "Target Brand", type: "select", options: DATA.brands, key: "party" },
+            { label: "Against Bill No", type: "text", key: "against_bill" },
+            { label: "Return Bill No", type: "text", key: "bill_no" },
+            { label: "Pieces", type: "number", key: "pcs" },
+            { label: "Amount", type: "number", key: "amount" },
+            { label: "Sent By (Remark)", type: "text", key: "sent_by" }
+        ],
+        OUT_RET: [
+            { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
+            { label: "Return Date", type: "date", key: "date_main" },
+            { label: "Customer", type: "text", key: "party" },
+            { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
+            { label: "Against Bill No", type: "text", key: "against_bill" },
+            { label: "Pieces", type: "number", key: "pcs" },
+            { label: "Amount", type: "number", key: "amount" },
+            { label: "Sent By (Remark)", type: "text", key: "sent_by" },
+            { label: "Approved By", type: "select", options: DATA.employees, key: "approved_by" }
+        ]
+    };
+
+    // --- STATE ---
+    let currentMode = "INWARD";
+    let allLogs = [];
+
+    // --- FUNCTIONS ---
+
+    window.setMode = (mode) => {
+        currentMode = mode;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById('form-title').innerText = `New ${mode.replace('_', ' ')} Entry`;
+        renderForm();
+    };
+
+    function renderForm() {
+        const container = document.getElementById('dynamic-fields');
+        container.innerHTML = '';
+        
+        FORMS[currentMode].forEach(field => {
+            const group = document.createElement('div');
+            group.className = 'form-group';
+            
+            const label = document.createElement('label');
+            label.innerText = field.label;
+            
+            let input;
+            if (field.type === 'select') {
+                input = document.createElement('select');
+                field.options.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    option.innerText = opt;
+                    input.appendChild(option);
+                });
+            } else {
+                input = document.createElement('input');
+                input.type = field.type;
+                if(field.type === 'number') input.step = "0.01";
+            }
+            input.name = field.key;
+            input.required = true;
+            if(field.type === 'date') input.valueAsDate = new Date();
+
+            group.appendChild(label);
+            group.appendChild(input);
+            container.appendChild(group);
+        });
+    }
+
+    window.submitData = async (e) => {
+        e.preventDefault();
+        const btn = document.querySelector('.submit-btn');
+        btn.innerText = "Saving...";
+        btn.disabled = true;
+
+        const formData = new FormData(e.target);
+        const data = { 
+            type: currentMode, 
+            timestamp: new Date() 
+        };
+        
+        formData.forEach((value, key) => data[key] = value);
+
+        try {
+            await addDoc(collection(db, "logs"), data);
+            alert("Saved Successfully!");
+            e.target.reset();
+            renderForm(); // Reset defaults
+            fetchData(); // Refresh table
+        } catch (error) {
+            console.error("Error adding document: ", error);
+            alert("Error saving data. Check console.");
+        }
+        btn.innerText = "Save Entry";
+        btn.disabled = false;
+    };
+
+    async function fetchData() {
+        const q = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(50));
+        const querySnapshot = await getDocs(q);
+        allLogs = [];
+        querySnapshot.forEach((doc) => {
+            allLogs.push(doc.data());
+        });
+        renderTable();
+    }
+
+    window.renderTable = () => {
+        const tbody = document.querySelector('#dataTable tbody');
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        tbody.innerHTML = '';
+
+        const filtered = allLogs.filter(log => {
+            const str = Object.values(log).join(' ').toLowerCase();
+            return str.includes(search);
+        });
+
+        filtered.forEach(log => {
+            const tr = document.createElement('tr');
+            // Determine primary date to show
+            const date = log.date_bill || log.date_lr || log.date_main || "N/A";
+            // Determine "Party" (Seller/Customer/Brand) based on what's available
+            const party = log.party || log.brand || "-";
+            
+            tr.innerHTML = `
+                <td>${date}</td>
+                <td><span style="font-size:0.8em; padding:2px 5px; border-radius:4px; background:#e5e7eb;">${log.type}</span></td>
+                <td>${log.firm}</td>
+                <td>${party}</td>
+                <td>${log.bill_no || log.against_bill || '-'}</td>
+                <td>${log.pcs || '-'}</td>
+                <td>${log.amount || '-'}</td>
+                <td>${log.recd_by || log.deliv_by || log.sent_by || '-'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Initialize
+    renderForm();
+    fetchData();
+
+</script>
+</body>
+</html>
