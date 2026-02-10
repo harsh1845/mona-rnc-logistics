@@ -129,7 +129,6 @@
     measurementId: "G-LSP2HCVPKC"
     };
     // Initialize Firebase
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
@@ -167,8 +166,10 @@
             { label: "Bill No", type: "text", key: "bill_no" },
             { label: "Pieces", type: "number", key: "pcs" },
             { label: "Amount", type: "number", key: "amount" },
+            // Staff can edit these:
             { label: "L/R No.", type: "text", key: "lr_no" },
             { label: "Transport Mode", type: "text", key: "transport_mode" },
+            
             { label: "Deliv Person", type: "select", options: DATA.employees, key: "deliv_by" },
             { label: "Bill Made By", type: "select", options: DATA.employees, key: "made_by" },
             { label: "Checked By", type: "select", options: DATA.employees, key: "checked_by" },
@@ -195,7 +196,7 @@
             { label: "Sent By (Remark)", type: "text", key: "remark" },
             { label: "Recvd By", type: "select", options: DATA.employees, key: "Recvd_by" },
             { label: "Approved By", type: "select", options: DATA.employees, key: "approved_by" },
-            { label: "Transport recieved", type: "type", key: "transport"},
+            { label: "Transport recieved", type: "text", key: "transport"},
             { label: "L/R No.", type: "text", key: "L/R_no" }
         ]
     };
@@ -204,7 +205,7 @@
     let currentMode = "INWARD";
     let allLogs = [];
     let isAdmin = false;
-    let editingId = null; // Stores the ID of the document being edited
+    let editingId = null;
 
     // --- LOGIN FUNCTIONS ---
     window.attemptLogin = () => {
@@ -212,7 +213,6 @@
         const p = document.getElementById('password').value;
         const err = document.getElementById('login-error');
 
-        // SIMPLE AUTHENTICATION
         if (u === "admin" && p === "admin") {
             isAdmin = true;
             loadApp();
@@ -227,13 +227,14 @@
     function loadApp() {
         document.getElementById('login-overlay').style.display = 'none';
         document.getElementById('app-container').style.display = 'block';
-        if(isAdmin) document.getElementById('actions-header').style.display = 'table-cell';
+        // Always show Actions column now because Staff also has an 'Edit' button
+        document.getElementById('actions-header').style.display = 'table-cell';
         renderForm();
         fetchData();
     }
     
     window.logout = () => {
-        location.reload(); // Reloads page to reset login
+        location.reload();
     };
 
     // --- APP FUNCTIONS ---
@@ -253,9 +254,9 @@
         const container = document.getElementById('dynamic-fields');
         container.innerHTML = '';
 
+        // 1. DETERMINE IF THIS IS A STAFF EDIT
         const isStaffEdit = (editingId !== null && !isAdmin);
-
-        const staffAllowedFields = ['lr_no', 'transport_mode', 'remark'];
+        const staffAllowedFields = ['lr_no', 'transport_mode', 'remark', 'L/R_no', 'transport'];
         
         FORMS[currentMode].forEach(field => {
             const group = document.createElement('div');
@@ -280,27 +281,28 @@
             }
             input.name = field.key;
             
-            // Fill data if editing
+            // 2. FILL DATA
             if(dataToFill && dataToFill[field.key]) {
                 input.value = dataToFill[field.key];
             }
 
+            // 3. APPLY STAFF LOCK
             if (isStaffEdit) {
-                // If this field is NOT in the allowed list, disable it
                 if (!staffAllowedFields.includes(field.key)) {
                     input.disabled = true;
-                    input.style.backgroundColor = "#e5e7eb"; // Grey out visual
+                    input.style.backgroundColor = "#e5e7eb";
+                    input.style.color = "#888";
                     input.style.cursor = "not-allowed";
                 }
             }
 
-            // Optional check logic
-            const optionalFields = ['remark', 'against_bill', 'credit_note_no', 'lr_no', 'transport_mode'];
+            // 4. REQUIRED LOGIC
+            // Allow optional fields to be empty
+            const optionalFields = ['remark', 'against_bill', 'credit_note_no', 'lr_no', 'transport_mode', 'L/R_no', 'transport'];
             if (!optionalFields.includes(field.key)) {
                 input.required = true;
             }
             
-            // Date default
             if(field.type === 'date' && !dataToFill) input.valueAsDate = new Date();
 
             group.appendChild(label);
@@ -322,30 +324,30 @@
             type: currentMode, 
             timestamp: new Date() 
         };
-        // If Staff is editing, 'disabled' fields won't be in FormData.
-        // We must merge the old data back in so we don't lose it.
+        
+        // MERGE OLD DATA: Required because disabled inputs are not sent in FormData
         if (editingId && !isAdmin) {
              const oldLog = allLogs.find(l => l.id === editingId);
              Object.assign(data, oldLog); // Start with old data
-             delete data.id; // Remove ID from data payload
+             delete data.id; // Remove ID so we don't save it inside the document
         }
+        
+        // Overwrite with new data from form
         formData.forEach((value, key) => data[key] = value);
 
         try {
             if (editingId) {
-                // UPDATE EXISTING
                 const docRef = doc(db, "logs", editingId);
                 await updateDoc(docRef, data);
                 alert("Updated Successfully!");
                 cancelEdit();
             } else {
-                // CREATE NEW
                 await addDoc(collection(db, "logs"), data);
                 alert("Saved Successfully!");
                 e.target.reset();
-                renderForm(); // Reset defaults
+                renderForm(); 
             }
-            fetchData(); // Refresh table
+            fetchData(); 
         } catch (error) {
             console.error("Error saving: ", error);
             alert("Error saving data. Check console.");
@@ -354,9 +356,7 @@
         btn.disabled = false;
     };
 
-    // --- FETCH & RENDER TABLE ---
     async function fetchData() {
-        // NOTE: In a real app, you might want to increase 'limit' or add pagination
         const q = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(50));
         const querySnapshot = await getDocs(q);
         allLogs = [];
@@ -379,11 +379,9 @@
         filtered.forEach(log => {
             const tr = document.createElement('tr');
             
-            // Helper to get display values
             const date = log.date_bill || log.date_lr || log.date_main || "N/A";
             const party = log.party || log.brand || "-";
             
-            // Build Action Buttons (Only for Admin)
             let actionButtons = '';
             if (isAdmin) {
                 actionButtons = `
@@ -392,9 +390,8 @@
                         <button class="action-btn btn-delete" onclick="deleteEntry('${log.id}')">Del</button>
                     </td>
                 `;
-            }
-            else {
-                // Staff ONLY gets Edit (to add L/R no later)
+            } else {
+                // Staff Edit Button
                 actionButtons = `
                     <td>
                         <button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button>
@@ -416,7 +413,6 @@
         });
     }
 
-    // --- ADMIN ACTIONS ---
     window.deleteEntry = async (id) => {
         if(!confirm("Are you sure you want to delete this log?")) return;
         try {
@@ -432,20 +428,22 @@
         const log = allLogs.find(l => l.id === id);
         if (!log) return;
 
-        // Switch tab to match the log type
+        // 1. Set Mode (Clears previous form)
         setMode(log.type);
         
-        // Fill form
+        // 2. IMPORTANT: Set ID *BEFORE* rendering the form
+        // This ensures the renderForm function knows we are in 'Edit Mode'
+        editingId = id; 
+        
+        // 3. Render Form (Now the 'disabled' logic will work)
         renderForm(log);
         
-        // Set Edit Mode
-        editingId = id;
+        // UI Updates
         document.getElementById('edit-notice').style.display = 'block';
         const btn = document.getElementById('save-btn');
-        btn.innerText = "Update Entry";
+        btn.innerText = isAdmin ? "Update Entry" : "Update L/R Info"; 
         btn.classList.add('updating');
         
-        // Scroll to form
         document.querySelector('.container').scrollIntoView({ behavior: 'smooth' });
     };
 
@@ -456,470 +454,7 @@
         btn.innerText = "Save Entry";
         btn.classList.remove('updating');
         document.getElementById('logForm').reset();
-        renderForm(); // Clear filled values
-    };
-
-</script>
-</body>
-</html><!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firm Logistics Manager</title>
-    
-    <style>
-        :root { --primary: #2563eb; --bg: #f3f4f6; --white: #ffffff; --danger: #ef4444; --warning: #f59e0b; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 20px; }
-        
-        .container { max-width: 1000px; margin: 0 auto; display: none; /* Hidden until login */ }
-        
-        /* Login Overlay */
-        #login-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #f3f4f6; display: flex; justify-content: center; align-items: center; z-index: 1000;
-        }
-        .login-box {
-            background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: center;
-        }
-        .login-box input { width: 90%; margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        .login-box button { width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-
-        /* Tabs */
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .tab { padding: 10px 20px; background: #ddd; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .tab.active { background: var(--primary); color: var(--white); }
-        
-        /* Forms */
-        .card { background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .form-group { display: flex; flex-direction: column; }
-        label { font-size: 0.85rem; color: #555; margin-bottom: 5px; font-weight: 600; }
-        input, select, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
-        button.submit-btn { background: #10b981; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; margin-top: 20px; width: 100%; }
-        button.submit-btn.updating { background: var(--warning); color: black; } /* Style for update mode */
-
-        /* Table */
-        .table-controls { display: flex; justify-content: space-between; margin-bottom: 10px; }
-        table { width: 100%; border-collapse: collapse; background: white; font-size: 0.9rem; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #f8f9fa; }
-        tr:hover { background: #f1f5f9; }
-        
-        /* Action Buttons */
-        .action-btn { padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; color: white; margin-right: 5px; font-size: 0.8rem; }
-        .btn-edit { background: var(--warning); color: black; }
-        .btn-delete { background: var(--danger); }
-
-        @media (max-width: 600px) { .table-controls { flex-direction: column; gap: 10px; } }
-    </style>
-</head>
-<body>
-
-<div id="login-overlay">
-    <div class="login-box">
-        <h2>System Login</h2>
-        <input type="text" id="username" placeholder="Username (admin/staff)">
-        <input type="password" id="password" placeholder="Password">
-        <button onclick="attemptLogin()">Login</button>
-        <p id="login-error" style="color:red; font-size:0.8rem; margin-top:10px;"></p>
-    </div>
-</div>
-
-<div class="container" id="app-container">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2>Logistics Management</h2>
-        <button onclick="logout()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer;">Logout</button>
-    </div>
-    
-    <div class="tabs">
-        <button class="tab active" onclick="setMode('INWARD')">PURCHASE</button>
-        <button class="tab" onclick="setMode('OUTWARD')">SALES</button>
-        <button class="tab" onclick="setMode('IN_RET')">PURCHASE RETURN</button>
-        <button class="tab" onclick="setMode('OUT_RET')">SALES RETURN</button>
-    </div>
-
-    <div class="card">
-        <h3 id="form-title">New Entry</h3>
-        <p id="edit-notice" style="display:none; color: var(--warning); font-size: 0.9rem;">⚠️ You are editing an existing record. <button type="button" onclick="cancelEdit()" style="text-decoration:underline; border:none; background:none; cursor:pointer; color:blue;">Cancel</button></p>
-        
-        <form id="logForm" onsubmit="submitData(event)">
-            <div class="form-grid" id="dynamic-fields"></div>
-            <button type="submit" class="submit-btn" id="save-btn">Save Entry</button>
-        </form>
-    </div>
-
-    <div class="card">
-        <div class="table-controls">
-            <h3>Recent Logs</h3>
-            <input type="text" id="searchInput" placeholder="Search Bill No, Firm, Name..." onkeyup="renderTable()">
-        </div>
-        <div style="overflow-x:auto;">
-            <table id="dataTable">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Firm</th>
-                        <th>Party/Brand</th>
-                        <th>Bill No</th>
-                        <th>Pcs</th>
-                        <th>Amt</th>
-                        <th id="actions-header" style="display:none;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<script type="module">
-    // --- IMPORT FIREBASE ---
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-    // --- PASTE YOUR FIREBASE CONFIG HERE ---
-    // Replace the object below with the one you copied from Firebase Console
-    const firebaseConfig = {
-    apiKey: "AIzaSyBBszqQlych7F1g82TA37y6Bvhj6EwFfdg",
-    authDomain: "logistics-app-mona-rnc.firebaseapp.com",
-    projectId: "logistics-app-mona-rnc",
-    storageBucket: "logistics-app-mona-rnc.firebasestorage.app",
-    messagingSenderId: "989428986519",
-    appId: "1:989428986519:web:cdcea9bd1b6aecdb9d2fd2",
-    measurementId: "G-LSP2HCVPKC"
-    };
-    // Initialize Firebase
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    // --- DATA LISTS ---
-    const DATA = {
-        firms: ["Mona", "RNC"],
-        sellers: ["Milton", "Apna Bazaar", "Karachu"],
-        brands: ["Jockey", "Amante", "Sweet Dreams"],
-        employees: ["Damu", "Madam", "Mayur"]
-    };
-
-    // --- FORM CONFIGURATION ---
-    const FORMS = {
-        INWARD: [
-            { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
-            { label: "L/R Date", type: "date", key: "date_lr" },
-            { label: "L/R No.", type: "text", key: "L/R_no" },
-            { label: "Bill Date", type: "date", key: "date_bill" },
-            { label: "Bill No.", type: "text", key: "bill_no" },
-            { label: "Date Recd", type: "date", key: "date_recd" },
-            { label: "Customer Name", type: "select", options: DATA.brands, key: "brand" },
-            { label: "Cartons", type: "number", key: "cartons" },
-            { label: "Pieces", type: "number", key: "pcs" },
-            { label: "Amount", type: "number", key: "amount" },
-            { label: "Recd By", type: "select", options: DATA.employees, key: "recd_by" },
-            { label: "Checked By", type: "select", options: DATA.employees, key: "checked_by" },
-            { label: "Remark", type: "text", key: "remark" }
-        ],
-        OUTWARD: [
-            { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
-            { label: "Bill Date", type: "date", key: "date_bill" },
-            { label: "Delivery Date", type: "date", key: "date_deliv" },
-            { label: "Purchaser/Cust", type: "text", key: "party" },
-            { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
-            { label: "Bill No", type: "text", key: "bill_no" },
-            { label: "Pieces", type: "number", key: "pcs" },
-            { label: "Amount", type: "number", key: "amount" },
-            { label: "L/R No.", type: "text", key: "lr_no" },
-            { label: "Transport Mode", type: "text", key: "transport_mode" },
-            { label: "Deliv Person", type: "select", options: DATA.employees, key: "deliv_by" },
-            { label: "Bill Made By", type: "select", options: DATA.employees, key: "made_by" },
-            { label: "Checked By", type: "select", options: DATA.employees, key: "checked_by" },
-            { label: "Remark", type: "text", key: "remark" }
-        ],
-        IN_RET: [
-            { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
-            { label: "Return Date", type: "date", key: "date_main" },
-            { label: "Target Brand", type: "select", options: DATA.brands, key: "party" },
-            { label: "Against Bill No", type: "text", key: "against_bill" },
-            { label: "Credit note No", type: "text", key: "credit_note_no" },
-            { label: "Pieces", type: "number", key: "pcs" },
-            { label: "Amount", type: "number", key: "amount" },
-            { label: "Sent By (Remark)", type: "text", key: "remark" }
-        ],
-        OUT_RET: [
-            { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
-            { label: "Return Date", type: "date", key: "date_main" },
-            { label: "Customer", type: "text", key: "party" },
-            { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
-            { label: "Against Bill No", type: "text", key: "against_bill" },
-            { label: "Pieces", type: "number", key: "pcs" },
-            { label: "Amount", type: "number", key: "amount" },
-            { label: "Sent By (Remark)", type: "text", key: "remark" },
-            { label: "Recvd By", type: "select", options: DATA.employees, key: "Recvd_by" },
-            { label: "Approved By", type: "select", options: DATA.employees, key: "approved_by" },
-            { label: "Transport recieved", type: "type", key: "transport"},
-            { label: "L/R No.", type: "text", key: "L/R_no" }
-        ]
-    };
-
-    // --- STATE ---
-    let currentMode = "INWARD";
-    let allLogs = [];
-    let isAdmin = false;
-    let editingId = null; // Stores the ID of the document being edited
-
-    // --- LOGIN FUNCTIONS ---
-    window.attemptLogin = () => {
-        const u = document.getElementById('username').value;
-        const p = document.getElementById('password').value;
-        const err = document.getElementById('login-error');
-
-        // SIMPLE AUTHENTICATION
-        if (u === "admin" && p === "admin") {
-            isAdmin = true;
-            loadApp();
-        } else if (u === "staff" && p === "123") {
-            isAdmin = false;
-            loadApp();
-        } else {
-            err.innerText = "Invalid Username or Password";
-        }
-    };
-
-    function loadApp() {
-        document.getElementById('login-overlay').style.display = 'none';
-        document.getElementById('app-container').style.display = 'block';
-        if(isAdmin) document.getElementById('actions-header').style.display = 'table-cell';
-        renderForm();
-        fetchData();
-    }
-    
-    window.logout = () => {
-        location.reload(); // Reloads page to reset login
-    };
-
-    // --- APP FUNCTIONS ---
-
-    window.setMode = (mode) => {
-        // If switching tabs while editing, cancel edit first
-        if(editingId) cancelEdit();
-        
-        currentMode = mode;
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        event.target.classList.add('active');
-        document.getElementById('form-title').innerText = `New ${mode.replace('_', ' ')} Entry`;
-        renderForm();
-    };
-
-    window.renderForm = (dataToFill = null) => {
-        const container = document.getElementById('dynamic-fields');
-        container.innerHTML = '';
-
-        const isStaffEdit = (editingId !== null && !isAdmin);
-
-        const staffAllowedFields = ['lr_no', 'transport_mode', 'remark'];
-        
-        FORMS[currentMode].forEach(field => {
-            const group = document.createElement('div');
-            group.className = 'form-group';
-            
-            const label = document.createElement('label');
-            label.innerText = field.label;
-            
-            let input;
-            if (field.type === 'select') {
-                input = document.createElement('select');
-                field.options.forEach(opt => {
-                    const option = document.createElement('option');
-                    option.value = opt;
-                    option.innerText = opt;
-                    input.appendChild(option);
-                });
-            } else {
-                input = document.createElement('input');
-                input.type = field.type;
-                if(field.type === 'number') input.step = "0.01";
-            }
-            input.name = field.key;
-            
-            // Fill data if editing
-            if(dataToFill && dataToFill[field.key]) {
-                input.value = dataToFill[field.key];
-            }
-
-            if (isStaffEdit) {
-                // If this field is NOT in the allowed list, disable it
-                if (!staffAllowedFields.includes(field.key)) {
-                    input.disabled = true;
-                    input.style.backgroundColor = "#e5e7eb"; // Grey out visual
-                    input.style.cursor = "not-allowed";
-                }
-            }
-
-            // Optional check logic
-            const optionalFields = ['remark', 'against_bill', 'credit_note_no', 'lr_no', 'transport_mode'];
-            if (!optionalFields.includes(field.key)) {
-                input.required = true;
-            }
-            
-            // Date default
-            if(field.type === 'date' && !dataToFill) input.valueAsDate = new Date();
-
-            group.appendChild(label);
-            group.appendChild(input);
-            container.appendChild(group);
-        });
-    };
-
-    // --- SUBMIT (CREATE OR UPDATE) ---
-    window.submitData = async (e) => {
-        e.preventDefault();
-        const btn = document.getElementById('save-btn');
-        const originalText = btn.innerText;
-        btn.innerText = editingId ? "Updating..." : "Saving...";
-        btn.disabled = true;
-
-        const formData = new FormData(e.target);
-        const data = { 
-            type: currentMode, 
-            timestamp: new Date() 
-        };
-        // If Staff is editing, 'disabled' fields won't be in FormData.
-        // We must merge the old data back in so we don't lose it.
-        if (editingId && !isAdmin) {
-             const oldLog = allLogs.find(l => l.id === editingId);
-             Object.assign(data, oldLog); // Start with old data
-             delete data.id; // Remove ID from data payload
-        }
-        formData.forEach((value, key) => data[key] = value);
-
-        try {
-            if (editingId) {
-                // UPDATE EXISTING
-                const docRef = doc(db, "logs", editingId);
-                await updateDoc(docRef, data);
-                alert("Updated Successfully!");
-                cancelEdit();
-            } else {
-                // CREATE NEW
-                await addDoc(collection(db, "logs"), data);
-                alert("Saved Successfully!");
-                e.target.reset();
-                renderForm(); // Reset defaults
-            }
-            fetchData(); // Refresh table
-        } catch (error) {
-            console.error("Error saving: ", error);
-            alert("Error saving data. Check console.");
-        }
-        btn.innerText = originalText;
-        btn.disabled = false;
-    };
-
-    // --- FETCH & RENDER TABLE ---
-    async function fetchData() {
-        // NOTE: In a real app, you might want to increase 'limit' or add pagination
-        const q = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(50));
-        const querySnapshot = await getDocs(q);
-        allLogs = [];
-        querySnapshot.forEach((doc) => {
-            allLogs.push({ id: doc.id, ...doc.data() });
-        });
-        renderTable();
-    }
-
-    window.renderTable = () => {
-        const tbody = document.querySelector('#dataTable tbody');
-        const search = document.getElementById('searchInput').value.toLowerCase();
-        tbody.innerHTML = '';
-
-        const filtered = allLogs.filter(log => {
-            const str = Object.values(log).join(' ').toLowerCase();
-            return str.includes(search);
-        });
-
-        filtered.forEach(log => {
-            const tr = document.createElement('tr');
-            
-            // Helper to get display values
-            const date = log.date_bill || log.date_lr || log.date_main || "N/A";
-            const party = log.party || log.brand || "-";
-            
-            // Build Action Buttons (Only for Admin)
-            let actionButtons = '';
-            if (isAdmin) {
-                actionButtons = `
-                    <td>
-                        <button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button>
-                        <button class="action-btn btn-delete" onclick="deleteEntry('${log.id}')">Del</button>
-                    </td>
-                `;
-            }
-            else {
-                // Staff ONLY gets Edit (to add L/R no later)
-                actionButtons = `
-                    <td>
-                        <button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button>
-                    </td>
-                `;
-            }
-
-            tr.innerHTML = `
-                <td>${date}</td>
-                <td><span style="font-size:0.8em; padding:2px 5px; border-radius:4px; background:#e5e7eb;">${log.type}</span></td>
-                <td>${log.firm}</td>
-                <td>${party}</td>
-                <td>${log.bill_no || log.against_bill || '-'}</td>
-                <td>${log.pcs || '-'}</td>
-                <td>${log.amount || '-'}</td>
-                ${actionButtons}
-            `;
-            tbody.appendChild(tr);
-        });
-    }
-
-    // --- ADMIN ACTIONS ---
-    window.deleteEntry = async (id) => {
-        if(!confirm("Are you sure you want to delete this log?")) return;
-        try {
-            await deleteDoc(doc(db, "logs", id));
-            fetchData();
-        } catch (error) {
-            console.error("Delete Error:", error);
-            alert("Could not delete. Check Firebase Rules.");
-        }
-    };
-
-    window.startEdit = (id) => {
-        const log = allLogs.find(l => l.id === id);
-        if (!log) return;
-
-        // Switch tab to match the log type
-        setMode(log.type);
-        
-        // Fill form
-        renderForm(log);
-        
-        // Set Edit Mode
-        editingId = id;
-        document.getElementById('edit-notice').style.display = 'block';
-        const btn = document.getElementById('save-btn');
-        btn.innerText = "Update Entry";
-        btn.classList.add('updating');
-        
-        // Scroll to form
-        document.querySelector('.container').scrollIntoView({ behavior: 'smooth' });
-    };
-
-    window.cancelEdit = () => {
-        editingId = null;
-        document.getElementById('edit-notice').style.display = 'none';
-        const btn = document.getElementById('save-btn');
-        btn.innerText = "Save Entry";
-        btn.classList.remove('updating');
-        document.getElementById('logForm').reset();
-        renderForm(); // Clear filled values
+        renderForm(); 
     };
 
 </script>
