@@ -345,12 +345,24 @@
         const isStaffEdit = (editingId !== null && !isAdmin);
         const staffAllowedFields = ['lr_no', 'transport_mode', 'remark', 'L/R_no', 'transport', 'signed_copy', 'delivery_type'];
         
-        // --- 1. BUILD DATALISTS (Hidden) ---
+        // --- 1. BUILD DATALISTS (Hidden & Deduplicated) ---
         const dlContainer = document.createElement('div');
         dlContainer.style.display = 'none';
 
-        // A. SALES: Locations
-        const uniqueLocs = [...new Set(CUSTOMER_DB.map(c => c.location))].sort();
+        // A. SALES: Locations (Fixes "Gadchandur" vs "GADCHANDUR" duplicates)
+        // We convert to UpperCase to check for duplicates, but display the original
+        const locSet = new Set();
+        const uniqueLocs = [];
+        
+        CUSTOMER_DB.forEach(c => {
+            const upper = c.location.toUpperCase().trim();
+            if (!locSet.has(upper) && upper.length > 0) {
+                locSet.add(upper);
+                uniqueLocs.push(c.location.trim()); // Keep one version
+            }
+        });
+        uniqueLocs.sort();
+
         const locDL = document.createElement('datalist');
         locDL.id = "dl-locations";
         uniqueLocs.forEach(loc => {
@@ -360,26 +372,36 @@
         });
         dlContainer.appendChild(locDL);
 
-        // B. SALES: Customers (Full List)
+        // B. SALES: Customers (Fixes "A-4GLOBAL" appearing twice)
+        const nameSet = new Set();
+        const uniqueNames = [];
+
+        CUSTOMER_DB.forEach(c => {
+            const name = c.name.trim();
+            if (!nameSet.has(name) && name.length > 0) {
+                nameSet.add(name);
+                uniqueNames.push(name);
+            }
+        });
+        uniqueNames.sort();
+
         const custDL = document.createElement('datalist');
         custDL.id = "dl-customers";
-        CUSTOMER_DB.forEach(c => {
+        uniqueNames.forEach(name => {
             const opt = document.createElement('option');
-            opt.value = c.name;
+            opt.value = name;
             custDL.appendChild(opt);
         });
         dlContainer.appendChild(custDL);
 
-        // C. PURCHASE: Sellers (Defaults + Sundry Creditors)
-        // 1. Get Sundry Creditors from DB
+        // C. PURCHASE: Sellers (Defaults + Sundry Creditors - Deduplicated)
         const sundrySellers = CUSTOMER_DB
             .filter(c => c.location.toUpperCase().includes("SUNDRY"))
-            .map(c => c.name);
+            .map(c => c.name.trim());
         
-        // 2. Combine with Defaults
-        const allSellers = [...DATA.sellers, ...sundrySellers].sort();
+        // Merge defaults, remove duplicates, and sort
+        const allSellers = [...new Set([...DATA.sellers, ...sundrySellers])].sort();
 
-        // 3. Create Datalist
         const sellerDL = document.createElement('datalist');
         sellerDL.id = "dl-purchase_sellers";
         allSellers.forEach(name => {
@@ -392,7 +414,7 @@
         container.appendChild(dlContainer);
         // ----------------------------------
 
-        // --- 2. RENDER FIELDS ---
+        // --- 2. RENDER FIELDS (Standard Logic) ---
         FORMS[currentMode].forEach(field => {
             const group = document.createElement('div');
             group.className = 'form-group';
@@ -416,26 +438,32 @@
                 input.type = field.type;
                 if(field.type === 'number') input.step = "0.01";
                 
-                // Attach correct DataList
                 if (field.list) {
                     input.setAttribute('list', `dl-${field.list}`);
                 }
                 
-                // Special Logic for Sales Location Filter
+                // Logic: Filter Customer List by Location
                 if (field.key === 'location_filter') {
                     input.oninput = (e) => {
                         const loc = e.target.value.toLowerCase();
                         const targetList = document.getElementById('dl-customers');
                         targetList.innerHTML = '';
+                        
+                        // Deduplicate filtered results on the fly
+                        const added = new Set();
+                        
                         CUSTOMER_DB.filter(c => c.location.toLowerCase().includes(loc))
                             .forEach(c => {
-                                const opt = document.createElement('option');
-                                opt.value = c.name;
-                                targetList.appendChild(opt);
+                                if (!added.has(c.name)) { // Prevent duplicates in search results
+                                    added.add(c.name);
+                                    const opt = document.createElement('option');
+                                    opt.value = c.name;
+                                    targetList.appendChild(opt);
+                                }
                             });
                     };
                 }
-                // Special Logic for Sales Customer Auto-fill
+                // Logic: Auto-fill Location from Customer Name
                 if (field.key === 'party' && currentMode === 'SALES') {
                     input.onchange = (e) => {
                          const match = CUSTOMER_DB.find(c => c.name === e.target.value);
