@@ -133,7 +133,6 @@
     // --- DATA LISTS ---
     const DATA = {
         firms: ["Mona", "RNC"],
-        sellers: ["Milton", "Apna Bazaar", "Karachu"],
         brands: ["Jockey", "Amante", "Sweet Dreams"],
         employees: ["Damu", "Madam", "Mayur"],
         deliveryTypes: ["Intra-city", "Inter-city"]
@@ -151,6 +150,22 @@
         if (CUSTOMER_DB.length === 0) {
             await fetchCustomersFromCloud();
         }
+        // --- NEW LOGIC: POPULATE SELLERS LIST ---
+        // Filter for anyone with location "SUNDRY CREDITORS"
+        const sundrySellers = CUSTOMER_DB
+            .filter(c => c.location.toUpperCase() === "SUNDRY CREDITORS")
+            .map(c => c.name);
+        
+        // Update the DATA object
+        DATA.sellers = [...sundrySellers].sort();
+
+        // IMPORTANT: Update the Form Configuration so the dropdown sees the new names
+        const purchaseField = FORMS.PURCHASE.find(f => f.key === 'party');
+        if (purchaseField) {
+            purchaseField.options = DATA.sellers;
+        }
+
+        console.log(`Added ${sundrySellers.length} Sundry Creditors to the Purchase list.`);
     }
 
     async function fetchCustomersFromCloud() {
@@ -178,7 +193,7 @@
             { label: "Bill Date", type: "date", key: "date_bill" },
             { label: "Bill No.", type: "text", key: "bill_no" },
             { label: "Date Recd", type: "date", key: "date_recd" },
-            { label: "Seller Name", type: "select", options: DATA.sellers, key: "party" },
+            { label: "Seller Name", type: "text", key: "party", list: "purchase_sellers" },
             { label: "Cartons", type: "number", key: "cartons" },
             { label: "Pieces", type: "number", key: "pcs" },
             { label: "Amount", type: "number", key: "amount" },
@@ -330,11 +345,11 @@
         const isStaffEdit = (editingId !== null && !isAdmin);
         const staffAllowedFields = ['lr_no', 'transport_mode', 'remark', 'L/R_no', 'transport', 'signed_copy', 'delivery_type'];
         
-        // Create DataLists Containers (Hidden)
+        // --- 1. BUILD DATALISTS (Hidden) ---
         const dlContainer = document.createElement('div');
         dlContainer.style.display = 'none';
-        
-        // 1. Locations Datalist
+
+        // A. SALES: Locations
         const uniqueLocs = [...new Set(CUSTOMER_DB.map(c => c.location))].sort();
         const locDL = document.createElement('datalist');
         locDL.id = "dl-locations";
@@ -345,7 +360,7 @@
         });
         dlContainer.appendChild(locDL);
 
-        // 2. Customers Datalist (Initially full)
+        // B. SALES: Customers (Full List)
         const custDL = document.createElement('datalist');
         custDL.id = "dl-customers";
         CUSTOMER_DB.forEach(c => {
@@ -354,9 +369,30 @@
             custDL.appendChild(opt);
         });
         dlContainer.appendChild(custDL);
-        container.appendChild(dlContainer);
 
-        // Render Fields
+        // C. PURCHASE: Sellers (Defaults + Sundry Creditors)
+        // 1. Get Sundry Creditors from DB
+        const sundrySellers = CUSTOMER_DB
+            .filter(c => c.location.toUpperCase().includes("SUNDRY"))
+            .map(c => c.name);
+        
+        // 2. Combine with Defaults
+        const allSellers = [...DATA.sellers, ...sundrySellers].sort();
+
+        // 3. Create Datalist
+        const sellerDL = document.createElement('datalist');
+        sellerDL.id = "dl-purchase_sellers";
+        allSellers.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            sellerDL.appendChild(opt);
+        });
+        dlContainer.appendChild(sellerDL);
+
+        container.appendChild(dlContainer);
+        // ----------------------------------
+
+        // --- 2. RENDER FIELDS ---
         FORMS[currentMode].forEach(field => {
             const group = document.createElement('div');
             group.className = 'form-group';
@@ -380,15 +416,32 @@
                 input.type = field.type;
                 if(field.type === 'number') input.step = "0.01";
                 
-                // Attach Datalist if specified
-                if (field.list === 'locations') {
-                    input.setAttribute('list', 'dl-locations');
-                    input.oninput = updateCustomerLists; // Trigger filter on type
-                    input.onchange = updateCustomerLists; 
+                // Attach correct DataList
+                if (field.list) {
+                    input.setAttribute('list', `dl-${field.list}`);
                 }
-                if (field.list === 'customers') {
-                    input.setAttribute('list', 'dl-customers');
-                    input.onchange = handleCustomerSelect; // Trigger auto-fill on select
+                
+                // Special Logic for Sales Location Filter
+                if (field.key === 'location_filter') {
+                    input.oninput = (e) => {
+                        const loc = e.target.value.toLowerCase();
+                        const targetList = document.getElementById('dl-customers');
+                        targetList.innerHTML = '';
+                        CUSTOMER_DB.filter(c => c.location.toLowerCase().includes(loc))
+                            .forEach(c => {
+                                const opt = document.createElement('option');
+                                opt.value = c.name;
+                                targetList.appendChild(opt);
+                            });
+                    };
+                }
+                // Special Logic for Sales Customer Auto-fill
+                if (field.key === 'party' && currentMode === 'SALES') {
+                    input.onchange = (e) => {
+                         const match = CUSTOMER_DB.find(c => c.name === e.target.value);
+                         const locInput = document.querySelector('input[name="location_filter"]');
+                         if(match && locInput) locInput.value = match.location;
+                    };
                 }
             }
             
@@ -413,7 +466,7 @@
 
         if (currentMode === 'SALES') updateVisibility();
     };
-
+    
     window.submitData = async (e) => {
         e.preventDefault();
         const btn = document.getElementById('save-btn');
