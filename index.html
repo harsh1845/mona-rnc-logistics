@@ -22,6 +22,11 @@
         .tab { padding: 10px 20px; background: #ddd; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .tab.active { background: var(--primary); color: var(--white); }
         
+        /* Special Manage Tabs */
+        .sub-tabs { display: flex; gap: 5px; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .sub-tab { padding: 5px 15px; background: white; border: 1px solid #ccc; border-radius: 15px; cursor: pointer; font-size: 0.9rem; }
+        .sub-tab.active { background: #374151; color: white; border-color: #374151; }
+
         /* Forms */
         .card { background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
@@ -32,8 +37,13 @@
         label { font-size: 0.85rem; color: #555; margin-bottom: 5px; font-weight: 600; }
         input, select, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; width: 100%; box-sizing: border-box; }
         button.submit-btn { background: #10b981; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; margin-top: 20px; width: 100%; }
-        button.submit-btn.updating { background: var(--warning); color: black; } 
-
+        
+        /* Manage Section Styles */
+        .manage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .manage-list { max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; }
+        .manage-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .manage-item:hover { background: #f9fafb; }
+        
         /* Table */
         .table-controls { display: flex; justify-content: space-between; margin-bottom: 10px; }
         table { width: 100%; border-collapse: collapse; background: white; font-size: 0.9rem; }
@@ -45,7 +55,10 @@
         .btn-edit { background: var(--warning); color: black; }
         .btn-delete { background: var(--danger); }
 
-        @media (max-width: 600px) { .table-controls { flex-direction: column; gap: 10px; } }
+        @media (max-width: 600px) { 
+            .table-controls { flex-direction: column; gap: 10px; } 
+            .manage-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -65,7 +78,7 @@
         <h2>Logistics Management</h2>
         <div style="text-align:right;">
              <button onclick="logout()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer;">Logout</button>
-             <button onclick="forceRefreshCustomers()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer; font-size:0.8rem;">🔄 Sync Customers</button>
+             <button onclick="forceRefreshData()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer; font-size:0.8rem;">🔄 Sync Data</button>
         </div>
     </div>
     
@@ -74,9 +87,10 @@
         <button class="tab" onclick="setMode('SALES')">SALES</button>
         <button class="tab" onclick="setMode('PURCHASE_RET')">PURCHASE RETURN</button>
         <button class="tab" onclick="setMode('SALES_RET')">SALES RETURN</button>
+        <button class="tab" style="background:#374151; color:white;" onclick="setMode('MANAGE')">MANAGE DATA</button>
     </div>
 
-    <div class="card">
+    <div class="card" id="log-entry-card">
         <h3 id="form-title">New Entry</h3>
         <p id="edit-notice" style="display:none; color: var(--warning); font-size: 0.9rem;">⚠️ You are editing an existing record. <button type="button" onclick="cancelEdit()" style="text-decoration:underline; border:none; background:none; cursor:pointer; color:blue;">Cancel</button></p>
         
@@ -86,7 +100,34 @@
         </form>
     </div>
 
-    <div class="card">
+    <div class="card" id="manage-ui-card" style="display:none;">
+        <h3>Manage Database</h3>
+        
+        <div class="sub-tabs">
+            <button class="sub-tab active" onclick="setManageType('CUSTOMER')">Customers</button>
+            <button class="sub-tab" onclick="setManageType('SELLER')">Sellers</button>
+            <button class="sub-tab" id="tab-emp" onclick="setManageType('EMPLOYEE')">Employees</button>
+        </div>
+
+        <div class="manage-grid">
+            <div style="background:#f9fafb; padding:15px; border-radius:8px;">
+                <h4 style="margin-top:0;">Add New <span id="manage-type-label">Customer</span></h4>
+                <form onsubmit="submitManageData(event)">
+                    <input type="text" id="new-name" placeholder="Name" onkeyup="renderManageList(this.value)" required>
+                    <input type="text" id="new-location" placeholder="Location" required>
+                    <button type="submit" class="submit-btn" style="margin-top:10px;">Add to Database</button>
+                </form>
+            </div>
+
+            <div>
+                <input type="text" id="manage-search" placeholder="Search..." onkeyup="renderManageList()">
+                <div class="manage-list" id="manage-list-container">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" id="table-card">
         <div class="table-controls">
             <h3>Recent Logs</h3>
             <input type="text" id="searchInput" placeholder="Search Bill No, Firm, Name..." onkeyup="renderTable()">
@@ -114,7 +155,7 @@
 <script type="module">
     // --- IMPORT FIREBASE ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, updateDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     // --- PASTE YOUR FIREBASE CONFIG HERE ---
     const firebaseConfig = {
@@ -130,61 +171,277 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- DATA LISTS ---
+    // --- STATE & DATA ---
+    let currentMode = "PURCHASE";
+    let manageType = "CUSTOMER"; // CUSTOMER, SELLER, EMPLOYEE
+    let allLogs = [];
+    let isAdmin = false;
+    let editingId = null;
+    
+    // CACHED DATA
+    let CUSTOMER_DB = [];
+    let EMPLOYEE_DB = [];
+
+    // CONSTANTS
     const DATA = {
         firms: ["Mona", "RNC"],
         brands: ["Jockey", "Amante", "Sweet Dreams"],
-        employees: ["Damu", "Madam", "Mayur"],
         deliveryTypes: ["Intra-city", "Inter-city"]
     };
 
-    // --- CUSTOMER CACHE LOGIC ---
-    let CUSTOMER_DB = [];
+    // --- AUTH ---
+    window.attemptLogin = async () => {
+        const u = document.getElementById('username').value;
+        const p = document.getElementById('password').value;
+        if ((u === "admin" && p === "admin") || (u === "staff" && p === "123")) {
+            isAdmin = (u === "admin");
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            document.getElementById('actions-header').style.display = 'table-cell';
+            
+            // Permissions: Hide Employee Tab for Staff
+            if(!isAdmin) document.getElementById('tab-emp').style.display = 'none';
 
+            await loadAllData();
+            renderForm();
+            fetchData();
+        } else {
+            document.getElementById('login-error').innerText = "Invalid Creds";
+        }
+    };
+    window.logout = () => location.reload();
+
+    // --- DATA LOADING (Customers + Employees) ---
+    async function loadAllData() {
+        await Promise.all([loadCustomers(), loadEmployees()]);
+    }
+    window.forceRefreshData = () => {
+        localStorage.clear();
+        location.reload();
+    }
+
+    // 1. Load Customers
     async function loadCustomers() {
         const cached = localStorage.getItem('customer_db');
         if (cached) {
             CUSTOMER_DB = JSON.parse(cached);
-            console.log("Loaded customers from cache.");
-        } 
-        if (CUSTOMER_DB.length === 0) {
-            await fetchCustomersFromCloud();
+        } else {
+            const q = query(collection(db, "customers"));
+            const snap = await getDocs(q);
+            CUSTOMER_DB = [];
+            snap.forEach(doc => CUSTOMER_DB.push({ id: doc.id, ...doc.data() }));
+            localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
         }
-        // --- NEW LOGIC: POPULATE SELLERS LIST ---
-        // Filter for anyone with location "SUNDRY CREDITORS"
-        const sundrySellers = CUSTOMER_DB
-            .filter(c => c.location.toUpperCase() === "SUNDRY CREDITORS")
-            .map(c => c.name);
-        
-        // Update the DATA object
-        DATA.sellers = [...sundrySellers].sort();
-
-        // IMPORTANT: Update the Form Configuration so the dropdown sees the new names
-        const purchaseField = FORMS.PURCHASE.find(f => f.key === 'party');
-        if (purchaseField) {
-            purchaseField.options = DATA.sellers;
-        }
-
-        console.log(`Added ${sundrySellers.length} Sundry Creditors to the Purchase list.`);
     }
 
-    async function fetchCustomersFromCloud() {
-        console.log("Downloading customers from cloud...");
-        const q = query(collection(db, "customers"));
-        const snap = await getDocs(q);
+    // 2. Load Employees (Auto-Seeds if empty)
+    async function loadEmployees() {
+        const cached = localStorage.getItem('employee_db');
+        if (cached) {
+            EMPLOYEE_DB = JSON.parse(cached);
+        } else {
+            const q = query(collection(db, "employees"));
+            const snap = await getDocs(q);
+            EMPLOYEE_DB = [];
+            snap.forEach(doc => EMPLOYEE_DB.push({ id: doc.id, ...doc.data() }));
+            
+            // AUTO-SEED: If database is empty, upload placeholders
+            if (EMPLOYEE_DB.length === 0) {
+                console.log("Seeding default employees...");
+                const defaults = ["Damu", "Madam", "Mayur"];
+                for (const name of defaults) {
+                    await addDoc(collection(db, "employees"), { name: name });
+                }
+                // Fetch again
+                const snap2 = await getDocs(q);
+                EMPLOYEE_DB = [];
+                snap2.forEach(doc => EMPLOYEE_DB.push({ id: doc.id, ...doc.data() }));
+            }
+            
+            localStorage.setItem('employee_db', JSON.stringify(EMPLOYEE_DB));
+        }
+    }
+
+    // --- NAVIGATION LOGIC ---
+    window.setMode = (mode) => {
+        currentMode = mode;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+
+        if (mode === 'MANAGE') {
+            document.getElementById('log-entry-card').style.display = 'none';
+            document.getElementById('table-card').style.display = 'none';
+            document.getElementById('manage-ui-card').style.display = 'block';
+            setManageType('CUSTOMER'); // Default sub-tab
+        } else {
+            if(editingId) cancelEdit();
+            document.getElementById('log-entry-card').style.display = 'block';
+            document.getElementById('table-card').style.display = 'block';
+            document.getElementById('manage-ui-card').style.display = 'none';
+            document.getElementById('form-title').innerText = `New ${mode.replace('_', ' ')} Entry`;
+            renderForm();
+        }
+    };
+
+    // --- MANAGE DATA LOGIC ---
+    window.setManageType = (type) => {
+        manageType = type;
         
-        CUSTOMER_DB = [];
-        snap.forEach(doc => {
-            const d = doc.data();
-            CUSTOMER_DB.push({ name: d.name, location: d.location });
+        // Update UI Tabs
+        document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+        // Find the button with correct onclick and set active
+        const tabs = Array.from(document.querySelectorAll('.sub-tab'));
+        const activeTab = tabs.find(t => t.innerText.toUpperCase().startsWith(type) || (type === 'SELLER' && t.innerText === 'Sellers'));
+        if(activeTab) activeTab.classList.add('active');
+
+        // Update Labels & Inputs
+        const label = type.charAt(0) + type.slice(1).toLowerCase();
+        document.getElementById('manage-type-label').innerText = label;
+        document.getElementById('new-name').value = '';
+        document.getElementById('new-location').value = '';
+
+        // Show/Hide Location Input (Only Customers need Location input)
+        if (type === 'CUSTOMER') {
+            document.getElementById('new-location').style.display = 'block';
+            document.getElementById('new-location').required = true;
+        } else {
+            document.getElementById('new-location').style.display = 'none';
+            document.getElementById('new-location').required = false;
+        }
+
+        renderManageList();
+    };
+
+    window.renderManageList = (overrideSearch) => {
+        const container = document.getElementById('manage-list-container');
+        
+        // LOGIC CHANGE: 
+        // If we typed in the "New Name" box (overrideSearch), use that.
+        // Otherwise, use the standard "Search" box on the right.
+        let search = (typeof overrideSearch === 'string') 
+            ? overrideSearch 
+            : document.getElementById('manage-search').value;
+            
+        search = search.toLowerCase();
+        container.innerHTML = '';
+
+        let list = [];
+        
+        if (manageType === 'CUSTOMER') {
+            list = CUSTOMER_DB.filter(c => c.location !== "Sundry Creditors");
+        } else if (manageType === 'SELLER') {
+            list = CUSTOMER_DB.filter(c => c.location === "Sundry Creditors");
+        } else if (manageType === 'EMPLOYEE') {
+            list = EMPLOYEE_DB;
+        }
+
+        // Filter by Search
+        list = list.filter(item => item.name.toLowerCase().includes(search));
+
+        // Sort A-Z
+        list.sort((a, b) => a.name.localeCompare(b.name));
+
+        list.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'manage-item';
+            
+            let info = `<strong>${item.name}</strong>`;
+            if (manageType === 'CUSTOMER') info += ` <small>(${item.location})</small>`;
+            
+            let btn = '';
+            if (isAdmin) {
+                btn = `<button class="action-btn btn-delete" onclick="deleteItem('${item.id}', '${manageType}')">Del</button>`;
+            }
+
+            div.innerHTML = `<div>${info}</div><div>${btn}</div>`;
+            container.appendChild(div);
         });
+    };
 
-        localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
-        alert(`Synced ${CUSTOMER_DB.length} customers from cloud!`);
-    }
-    window.forceRefreshCustomers = () => fetchCustomersFromCloud();
+    window.submitManageData = async (e) => {
+        e.preventDefault();
+        const nameInput = document.getElementById('new-name');
+        const locInput = document.getElementById('new-location');
+        const name = nameInput.value.trim().toUpperCase();
+        let location = "";
 
-    // --- FORM CONFIGURATION ---
+        // 1. Prepare Data
+        let collName = "customers"; 
+        let data = { name: name };
+
+        if (manageType === 'CUSTOMER') {
+            location = locInput.value.trim().toUpperCase();
+            data.location = location;
+        } else if (manageType === 'SELLER') {
+            data.location = "SUNDRY CREDITORS"; // Auto-set location for sellers
+        } else if (manageType === 'EMPLOYEE') {
+            collName = "employees";
+        }
+
+        // Generate ID
+        const id = name.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() + "_" + Math.floor(Math.random() * 1000);
+
+        try {
+            // 2. Save to Cloud (Firebase)
+            await setDoc(doc(db, collName, id), data);
+            
+            // 3. INSTANT UPDATE (The Fix)
+            // Instead of re-downloading, we just push the new guy into our current list
+            const newItem = { id: id, ...data };
+            
+            if (manageType === 'EMPLOYEE') {
+                EMPLOYEE_DB.push(newItem);
+                // Update the browser cache so it remembers next time
+                localStorage.setItem('employee_db', JSON.stringify(EMPLOYEE_DB));
+            } else {
+                // Both Customers and Sellers go into CUSTOMER_DB
+                CUSTOMER_DB.push(newItem);
+                localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
+            }
+
+            alert(`${manageType} Added Successfully!`);
+            
+            // 4. Reset Form & Refresh List UI Only
+            nameInput.value = '';
+            locInput.value = '';
+            renderManageList(); 
+
+        } catch (error) {
+            console.error(error);
+            alert("Error adding data.");
+        }
+    };
+
+    window.deleteItem = async (id, type) => {
+        if (!confirm("Delete this item? This cannot be undone.")) return;
+        
+        let collName = (type === 'EMPLOYEE') ? "employees" : "customers";
+
+        try {
+            // 1. Delete from Cloud
+            await deleteDoc(doc(db, collName, id));
+            
+            // 2. INSTANT UPDATE (The Fix)
+            if (type === 'EMPLOYEE') {
+                // Remove from local array
+                EMPLOYEE_DB = EMPLOYEE_DB.filter(item => item.id !== id);
+                localStorage.setItem('employee_db', JSON.stringify(EMPLOYEE_DB));
+            } else {
+                // Remove from local array
+                CUSTOMER_DB = CUSTOMER_DB.filter(item => item.id !== id);
+                localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
+            }
+
+            // 3. Refresh List UI Only
+            renderManageList();
+            
+        } catch (error) {
+            console.error(error);
+            alert("Error deleting.");
+        }
+    };
+
+    // --- MAIN FORM CONFIGURATION ---
     const FORMS = {
         PURCHASE: [
             { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
@@ -197,20 +454,16 @@
             { label: "Cartons", type: "number", key: "cartons" },
             { label: "Pieces", type: "number", key: "pcs" },
             { label: "Amount", type: "number", key: "amount" },
-            { label: "Recd By", type: "select", options: DATA.employees, key: "recd_by" },
-            { label: "Checked By", type: "select", options: DATA.employees, key: "checked_by" },
+            { label: "Recd By", type: "text", key: "recd_by", list: "employees" },
+            { label: "Checked By", type: "text", key: "checked_by", list: "employees" },
             { label: "Remark", type: "text", key: "remark" }
         ],
         SALES: [
             { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
             { label: "Bill Date", type: "date", key: "date_bill" },
             { label: "Delivery Date", type: "date", key: "date_deliv" },
-            
-            // --- NEW INTERACTIVE FIELDS ---
             { label: "Location (Filter)", type: "text", key: "location_filter", list: "locations" },
             { label: "Purchaser/Cust", type: "text", key: "party", list: "customers" },
-            // ------------------------------
-
             { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
             { label: "Bill No", type: "text", key: "bill_no" },
             { label: "Pieces", type: "number", key: "pcs" },
@@ -219,123 +472,35 @@
             { label: "L/R No.", type: "text", key: "lr_no", group: "intra" },
             { label: "Transport Mode", type: "text", key: "transport_mode", group: "intra" },
             { label: "Signed Copy Recvd?", type: "select", options: ["No", "Yes"], key: "signed_copy", group: "inter" },
-            { label: "Deliv Person", type: "select", options: DATA.employees, key: "deliv_by" },
-            { label: "Bill Made By", type: "select", options: DATA.employees, key: "made_by" },
-            { label: "Checked By", type: "select", options: DATA.employees, key: "checked_by" },
+            { label: "Deliv Person", type: "text", key: "deliv_by", list: "employees" },
+            { label: "Bill Made By", type: "text", key: "made_by", list: "employees" },
+            { label: "Checked By", type: "text", key: "checked_by", list: "employees" },
             { label: "Remark", type: "text", key: "remark" }
         ],
         PURCHASE_RET: [
             { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
             { label: "Return Date", type: "date", key: "date_main" },
-            { label: "Location (Filter)", type: "text", key: "location_filter", list: "locations" },
-            { label: "Purchaser/Cust", type: "text", key: "party", list: "customers" }, 
-            { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
+            { label: "Target Brand", type: "select", options: DATA.brands, key: "party" },
             { label: "Against Bill No", type: "text", key: "against_bill" },
+            { label: "Credit note No", type: "text", key: "credit_note_no" },
             { label: "Pieces", type: "number", key: "pcs" },
             { label: "Amount", type: "number", key: "amount" },
-            { label: "Sent By (Remark)", type: "text", key: "remark" },
-            { label: "Recvd By", type: "select", options: DATA.employees, key: "Recvd_by" },
-            { label: "Approved By", type: "select", options: DATA.employees, key: "approved_by" },
-            { label: "Transport recieved", type: "text", key: "transport"},
-            { label: "L/R No.", type: "text", key: "L/R_no" }
+            { label: "Sent By (Remark)", type: "text", key: "remark" }
         ],
         SALES_RET: [
             { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
             { label: "Return Date", type: "date", key: "date_main" },
-            { label: "Location (Filter)", type: "text", key: "location_filter", list: "locations" },
-            { label: "Purchaser/Cust", type: "text", key: "party", list: "customers" }, 
+            { label: "Customer", type: "text", key: "party", list: "customers" }, 
             { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
             { label: "Against Bill No", type: "text", key: "against_bill" },
             { label: "Pieces", type: "number", key: "pcs" },
             { label: "Amount", type: "number", key: "amount" },
             { label: "Sent By (Remark)", type: "text", key: "remark" },
-            { label: "Recvd By", type: "select", options: DATA.employees, key: "Recvd_by" },
-            { label: "Approved By", type: "select", options: DATA.employees, key: "approved_by" },
+            { label: "Recvd By", type: "text", key: "Recvd_by", list: "employees" },
+            { label: "Approved By", type: "text", key: "approved_by", list: "employees" },
             { label: "Transport recieved", type: "text", key: "transport"},
             { label: "L/R No.", type: "text", key: "L/R_no" }
         ]
-    };
-
-    // --- STATE ---
-    let currentMode = "PURCHASE";
-    let allLogs = [];
-    let isAdmin = false;
-    let editingId = null;
-
-    // --- AUTH ---
-    window.attemptLogin = async () => {
-        const u = document.getElementById('username').value;
-        const p = document.getElementById('password').value;
-        if ((u === "admin" && p === "admin") || (u === "staff" && p === "123")) {
-            isAdmin = (u === "admin");
-            document.getElementById('login-overlay').style.display = 'none';
-            document.getElementById('app-container').style.display = 'block';
-            document.getElementById('actions-header').style.display = 'table-cell';
-            
-            await loadCustomers();
-            renderForm();
-            fetchData();
-        } else {
-            document.getElementById('login-error').innerText = "Invalid Creds";
-        }
-    };
-    window.logout = () => location.reload();
-
-    // --- APP CORE ---
-    window.setMode = (mode) => {
-        if(editingId) cancelEdit();
-        currentMode = mode;
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        event.target.classList.add('active');
-        document.getElementById('form-title').innerText = `New ${mode.replace('_', ' ')} Entry`;
-        renderForm();
-    };
-
-    window.updateVisibility = () => {
-        if (currentMode !== 'SALES') return;
-        const typeSelect = document.querySelector('select[name="delivery_type"]');
-        if (!typeSelect) return;
-        const type = typeSelect.value;
-        
-        document.querySelectorAll('.group-intra').forEach(el => el.classList.toggle('hidden-field', type !== 'Intra-city'));
-        document.querySelectorAll('.group-inter').forEach(el => el.classList.toggle('hidden-field', type !== 'Inter-city'));
-    };
-
-    // --- DYNAMIC LINKED FIELDS LOGIC ---
-    window.updateCustomerLists = () => {
-        // Only run for SALES mode
-        if (currentMode !== 'SALES') return;
-
-        const locInput = document.querySelector('input[name="location_filter"]');
-        const custInput = document.querySelector('input[name="party"]');
-        if (!locInput || !custInput) return;
-
-        const selectedLoc = locInput.value.toLowerCase().trim();
-        const custDatalist = document.getElementById('dl-customers');
-        
-        // 1. FILTER CUSTOMERS based on Location
-        custDatalist.innerHTML = '';
-        const filteredCusts = selectedLoc === '' 
-            ? CUSTOMER_DB 
-            : CUSTOMER_DB.filter(c => c.location.toLowerCase().includes(selectedLoc));
-            
-        filteredCusts.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.name;
-            custDatalist.appendChild(opt);
-        });
-    };
-
-    window.handleCustomerSelect = (e) => {
-        const custName = e.target.value;
-        const locInput = document.querySelector('input[name="location_filter"]');
-        
-        // Find exact customer match
-        const match = CUSTOMER_DB.find(c => c.name === custName);
-        if (match && locInput) {
-            locInput.value = match.location; // Auto-fill Location
-            updateCustomerLists(); // Re-filter list (optional, keeps UI consistent)
-        }
     };
 
     window.renderForm = (dataToFill = null) => {
@@ -345,76 +510,57 @@
         const isStaffEdit = (editingId !== null && !isAdmin);
         const staffAllowedFields = ['lr_no', 'transport_mode', 'remark', 'L/R_no', 'transport', 'signed_copy', 'delivery_type'];
         
-        // --- 1. BUILD DATALISTS (Hidden & Deduplicated) ---
+        // --- BUILD DYNAMIC DATALISTS ---
         const dlContainer = document.createElement('div');
         dlContainer.style.display = 'none';
 
-        // A. SALES: Locations (Fixes "Gadchandur" vs "GADCHANDUR" duplicates)
-        // We convert to UpperCase to check for duplicates, but display the original
-        const locSet = new Set();
-        const uniqueLocs = [];
-        
-        CUSTOMER_DB.forEach(c => {
-            const upper = c.location.toUpperCase().trim();
-            if (!locSet.has(upper) && upper.length > 0) {
-                locSet.add(upper);
-                uniqueLocs.push(c.location.trim()); // Keep one version
-            }
-        });
-        uniqueLocs.sort();
-
+        // 1. Locations
+        const uniqueLocs = [...new Set(CUSTOMER_DB.map(c => c.location))].sort();
         const locDL = document.createElement('datalist');
         locDL.id = "dl-locations";
-        uniqueLocs.forEach(loc => {
-            const opt = document.createElement('option');
-            opt.value = loc;
-            locDL.appendChild(opt);
+        uniqueLocs.forEach(l => {
+            const o = document.createElement('option');
+            o.value = l;
+            locDL.appendChild(o);
         });
         dlContainer.appendChild(locDL);
 
-        // B. SALES: Customers (Fixes "A-4GLOBAL" appearing twice)
-        const nameSet = new Set();
-        const uniqueNames = [];
-
-        CUSTOMER_DB.forEach(c => {
-            const name = c.name.trim();
-            if (!nameSet.has(name) && name.length > 0) {
-                nameSet.add(name);
-                uniqueNames.push(name);
-            }
-        });
-        uniqueNames.sort();
-
+        // 2. Customers
         const custDL = document.createElement('datalist');
         custDL.id = "dl-customers";
-        uniqueNames.forEach(name => {
-            const opt = document.createElement('option');
-            opt.value = name;
-            custDL.appendChild(opt);
+        // Filter out "Sundry Creditors" from standard customer list
+        CUSTOMER_DB.filter(c => c.location !== "Sundry Creditors").forEach(c => {
+            const o = document.createElement('option');
+            o.value = c.name;
+            custDL.appendChild(o);
         });
         dlContainer.appendChild(custDL);
 
-        // C. PURCHASE: Sellers (Defaults + Sundry Creditors - Deduplicated)
-        const sundrySellers = CUSTOMER_DB
-            .filter(c => c.location.toUpperCase().includes("SUNDRY"))
-            .map(c => c.name.trim());
-        
-        // Merge defaults, remove duplicates, and sort
-        const allSellers = [...new Set([...DATA.sellers, ...sundrySellers])].sort();
-
+        // 3. Purchase Sellers (Sundry + Defaults)
+        const sundrySellers = CUSTOMER_DB.filter(c => c.location === "Sundry Creditors").map(c => c.name);
+        const allSellers = [...new Set(["Milton", "Apna Bazaar", "Karachu", ...sundrySellers])].sort();
         const sellerDL = document.createElement('datalist');
         sellerDL.id = "dl-purchase_sellers";
-        allSellers.forEach(name => {
-            const opt = document.createElement('option');
-            opt.value = name;
-            sellerDL.appendChild(opt);
+        allSellers.forEach(n => {
+            const o = document.createElement('option');
+            o.value = n;
+            sellerDL.appendChild(o);
         });
         dlContainer.appendChild(sellerDL);
 
-        container.appendChild(dlContainer);
-        // ----------------------------------
+        // 4. Employees
+        const empDL = document.createElement('datalist');
+        empDL.id = "dl-employees";
+        EMPLOYEE_DB.forEach(e => {
+            const o = document.createElement('option');
+            o.value = e.name;
+            empDL.appendChild(o);
+        });
+        dlContainer.appendChild(empDL);
 
-        // --- 2. RENDER FIELDS (Standard Logic) ---
+        container.appendChild(dlContainer);
+
+        // --- RENDER INPUTS ---
         FORMS[currentMode].forEach(field => {
             const group = document.createElement('div');
             group.className = 'form-group';
@@ -438,32 +584,25 @@
                 input.type = field.type;
                 if(field.type === 'number') input.step = "0.01";
                 
+                // Attach DataList
                 if (field.list) {
                     input.setAttribute('list', `dl-${field.list}`);
                 }
                 
-                // Logic: Filter Customer List by Location
+                // Special Interactions
                 if (field.key === 'location_filter') {
                     input.oninput = (e) => {
                         const loc = e.target.value.toLowerCase();
                         const targetList = document.getElementById('dl-customers');
                         targetList.innerHTML = '';
-                        
-                        // Deduplicate filtered results on the fly
-                        const added = new Set();
-                        
-                        CUSTOMER_DB.filter(c => c.location.toLowerCase().includes(loc))
+                        CUSTOMER_DB.filter(c => c.location.toLowerCase().includes(loc) && c.location !== "Sundry Creditors")
                             .forEach(c => {
-                                if (!added.has(c.name)) { // Prevent duplicates in search results
-                                    added.add(c.name);
-                                    const opt = document.createElement('option');
-                                    opt.value = c.name;
-                                    targetList.appendChild(opt);
-                                }
+                                const o = document.createElement('option');
+                                o.value = c.name;
+                                targetList.appendChild(o);
                             });
                     };
                 }
-                // Logic: Auto-fill Location from Customer Name
                 if (field.key === 'party' && currentMode === 'SALES') {
                     input.onchange = (e) => {
                          const match = CUSTOMER_DB.find(c => c.name === e.target.value);
@@ -475,17 +614,13 @@
             
             input.name = field.key;
             if (field.key === 'delivery_type') input.onchange = updateVisibility;
-
             if(dataToFill && dataToFill[field.key]) input.value = dataToFill[field.key];
-
             if (isStaffEdit && !staffAllowedFields.includes(field.key)) {
                 input.disabled = true;
                 input.style.backgroundColor = "#e5e7eb";
             }
-
             const optionalFields = ['remark', 'against_bill', 'credit_note_no', 'lr_no', 'transport_mode', 'L/R_no', 'transport', 'signed_copy', 'location_filter'];
             if (!optionalFields.includes(field.key)) input.required = true;
-            
             if(field.type === 'date' && !dataToFill) input.valueAsDate = new Date();
             
             group.appendChild(input);
@@ -494,17 +629,25 @@
 
         if (currentMode === 'SALES') updateVisibility();
     };
-    
+
+    window.updateVisibility = () => {
+        if (currentMode !== 'SALES') return;
+        const typeSelect = document.querySelector('select[name="delivery_type"]');
+        if (!typeSelect) return;
+        const type = typeSelect.value;
+        document.querySelectorAll('.group-intra').forEach(el => el.classList.toggle('hidden-field', type !== 'Intra-city'));
+        document.querySelectorAll('.group-inter').forEach(el => el.classList.toggle('hidden-field', type !== 'Inter-city'));
+    };
+
+    // --- STANDARD LOG SUBMIT ---
     window.submitData = async (e) => {
         e.preventDefault();
         const btn = document.getElementById('save-btn');
-        const originalText = btn.innerText;
         btn.innerText = "Saving...";
         btn.disabled = true;
 
         const formData = new FormData(e.target);
         const data = { type: currentMode, timestamp: new Date() };
-        
         if (editingId && !isAdmin) {
              const oldLog = allLogs.find(l => l.id === editingId);
              Object.assign(data, oldLog); 
@@ -525,7 +668,7 @@
             }
             fetchData(); 
         } catch (error) { console.error(error); alert("Error saving."); }
-        btn.innerText = originalText;
+        btn.innerText = "Save Entry";
         btn.disabled = false;
     };
 
@@ -548,7 +691,7 @@
             const date = log.date_bill || log.date_lr || log.date_main || "N/A";
             const party = log.party || log.brand || "-";
             const btnHtml = isAdmin ? 
-                `<button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button><button class="action-btn btn-delete" onclick="deleteEntry('${log.id}')">Del</button>` : 
+                `<button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button><button class="action-btn btn-delete" onclick="deleteItemLog('${log.id}')">Del</button>` : 
                 `<button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button>`;
 
             tr.innerHTML = `<td>${date}</td><td><span style="font-size:0.8em; padding:2px 5px; background:#e5e7eb;">${log.type}</span></td><td>${log.firm}</td><td>${party}</td><td>${log.bill_no || log.against_bill || '-'}</td><td>${log.pcs || '-'}</td><td>${log.amount || '-'}</td><td>${btnHtml}</td>`;
@@ -556,7 +699,7 @@
         });
     }
 
-    window.deleteEntry = async (id) => { if(confirm("Delete?")) { await deleteDoc(doc(db, "logs", id)); fetchData(); }};
+    window.deleteItemLog = async (id) => { if(confirm("Delete Log?")) { await deleteDoc(doc(db, "logs", id)); fetchData(); }};
 
     window.startEdit = (id) => {
         const log = allLogs.find(l => l.id === id);
