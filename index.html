@@ -6,19 +6,14 @@
     <title>Firm Logistics Manager</title>
     
     <style>
-        :root { --primary: #2563eb; --bg: #f3f4f6; --white: #ffffff; --danger: #ef4444; --warning: #f59e0b; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        :root { --primary: #2563eb; --bg: #f3f4f6; --white: #ffffff; --danger: #ef4444; --warning: #f59e0b; --text: #1f2937; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); }
         
-        .container { max-width: 1000px; margin: 0 auto; display: none; /* Hidden until login */ }
+        .container { max-width: 1000px; margin: 0 auto; display: none; }
         
         /* Login Overlay */
-        #login-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #f3f4f6; display: flex; justify-content: center; align-items: center; z-index: 1000;
-        }
-        .login-box {
-            background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: center;
-        }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f3f4f6; display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: center; }
         .login-box input { width: 90%; margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
         .login-box button { width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
 
@@ -30,11 +25,14 @@
         /* Forms */
         .card { background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .form-group { display: flex; flex-direction: column; }
+        .form-group { display: flex; flex-direction: column; } 
+        
+        .hidden-field { display: none !important; }
+
         label { font-size: 0.85rem; color: #555; margin-bottom: 5px; font-weight: 600; }
-        input, select, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        input, select, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; width: 100%; box-sizing: border-box; }
         button.submit-btn { background: #10b981; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; margin-top: 20px; width: 100%; }
-        button.submit-btn.updating { background: var(--warning); color: black; } /* Style for update mode */
+        button.submit-btn.updating { background: var(--warning); color: black; } 
 
         /* Table */
         .table-controls { display: flex; justify-content: space-between; margin-bottom: 10px; }
@@ -43,7 +41,6 @@
         th { background: #f8f9fa; }
         tr:hover { background: #f1f5f9; }
         
-        /* Action Buttons */
         .action-btn { padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; color: white; margin-right: 5px; font-size: 0.8rem; }
         .btn-edit { background: var(--warning); color: black; }
         .btn-delete { background: var(--danger); }
@@ -66,14 +63,17 @@
 <div class="container" id="app-container">
     <div style="display:flex; justify-content:space-between; align-items:center;">
         <h2>Logistics Management</h2>
-        <button onclick="logout()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer;">Logout</button>
+        <div style="text-align:right;">
+             <button onclick="logout()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer;">Logout</button>
+             <button onclick="forceRefreshCustomers()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer; font-size:0.8rem;">🔄 Sync Customers</button>
+        </div>
     </div>
     
     <div class="tabs">
-        <button class="tab active" onclick="setMode('INWARD')">PURCHASE</button>
-        <button class="tab" onclick="setMode('OUTWARD')">SALES</button>
-        <button class="tab" onclick="setMode('IN_RET')">PURCHASE RETURN</button>
-        <button class="tab" onclick="setMode('OUT_RET')">SALES RETURN</button>
+        <button class="tab active" onclick="setMode('PURCHASE')">PURCHASE</button>
+        <button class="tab" onclick="setMode('SALES')">SALES</button>
+        <button class="tab" onclick="setMode('PURCHASE_RET')">PURCHASE RETURN</button>
+        <button class="tab" onclick="setMode('SALES_RET')">SALES RETURN</button>
     </div>
 
     <div class="card">
@@ -105,8 +105,7 @@
                         <th id="actions-header" style="display:none;">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    </tbody>
+                <tbody></tbody>
             </table>
         </div>
     </div>
@@ -118,17 +117,16 @@
     import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     // --- PASTE YOUR FIREBASE CONFIG HERE ---
-    // Replace the object below with the one you copied from Firebase Console
     const firebaseConfig = {
-    apiKey: "AIzaSyBBszqQlych7F1g82TA37y6Bvhj6EwFfdg",
-    authDomain: "logistics-app-mona-rnc.firebaseapp.com",
-    projectId: "logistics-app-mona-rnc",
-    storageBucket: "logistics-app-mona-rnc.firebasestorage.app",
-    messagingSenderId: "989428986519",
-    appId: "1:989428986519:web:cdcea9bd1b6aecdb9d2fd2",
-    measurementId: "G-LSP2HCVPKC"
+        apiKey: "AIzaSyBBszqQlych7F1g82TA37y6Bvhj6EwFfdg",
+        authDomain: "logistics-app-mona-rnc.firebaseapp.com",
+        projectId: "logistics-app-mona-rnc",
+        storageBucket: "logistics-app-mona-rnc.firebasestorage.app",
+        messagingSenderId: "989428986519",
+        appId: "1:989428986519:web:cdcea9bd1b6aecdb9d2fd2",
+        measurementId: "G-LSP2HCVPKC"
     };
-    // Initialize Firebase
+    
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
@@ -137,19 +135,50 @@
         firms: ["Mona", "RNC"],
         sellers: ["Milton", "Apna Bazaar", "Karachu"],
         brands: ["Jockey", "Amante", "Sweet Dreams"],
-        employees: ["Damu", "Madam", "Mayur"]
+        employees: ["Damu", "Madam", "Mayur"],
+        deliveryTypes: ["Intra-city", "Inter-city"]
     };
+
+    // --- CUSTOMER CACHE LOGIC ---
+    let CUSTOMER_DB = [];
+
+    async function loadCustomers() {
+        const cached = localStorage.getItem('customer_db');
+        if (cached) {
+            CUSTOMER_DB = JSON.parse(cached);
+            console.log("Loaded customers from cache.");
+        } 
+        if (CUSTOMER_DB.length === 0) {
+            await fetchCustomersFromCloud();
+        }
+    }
+
+    async function fetchCustomersFromCloud() {
+        console.log("Downloading customers from cloud...");
+        const q = query(collection(db, "customers"));
+        const snap = await getDocs(q);
+        
+        CUSTOMER_DB = [];
+        snap.forEach(doc => {
+            const d = doc.data();
+            CUSTOMER_DB.push({ name: d.name, location: d.location });
+        });
+
+        localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
+        alert(`Synced ${CUSTOMER_DB.length} customers from cloud!`);
+    }
+    window.forceRefreshCustomers = () => fetchCustomersFromCloud();
 
     // --- FORM CONFIGURATION ---
     const FORMS = {
-        INWARD: [
+        PURCHASE: [
             { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
             { label: "L/R Date", type: "date", key: "date_lr" },
             { label: "L/R No.", type: "text", key: "L/R_no" },
             { label: "Bill Date", type: "date", key: "date_bill" },
             { label: "Bill No.", type: "text", key: "bill_no" },
             { label: "Date Recd", type: "date", key: "date_recd" },
-            { label: "Customer Name", type: "select", options: DATA.brands, key: "brand" },
+            { label: "Seller Name", type: "select", options: DATA.sellers, key: "party" },
             { label: "Cartons", type: "number", key: "cartons" },
             { label: "Pieces", type: "number", key: "pcs" },
             { label: "Amount", type: "number", key: "amount" },
@@ -157,38 +186,49 @@
             { label: "Checked By", type: "select", options: DATA.employees, key: "checked_by" },
             { label: "Remark", type: "text", key: "remark" }
         ],
-        OUTWARD: [
+        SALES: [
             { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
             { label: "Bill Date", type: "date", key: "date_bill" },
             { label: "Delivery Date", type: "date", key: "date_deliv" },
-            { label: "Purchaser/Cust", type: "text", key: "party" },
+            
+            // --- NEW INTERACTIVE FIELDS ---
+            { label: "Location (Filter)", type: "text", key: "location_filter", list: "locations" },
+            { label: "Purchaser/Cust", type: "text", key: "party", list: "customers" },
+            // ------------------------------
+
             { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
             { label: "Bill No", type: "text", key: "bill_no" },
             { label: "Pieces", type: "number", key: "pcs" },
             { label: "Amount", type: "number", key: "amount" },
-            // Staff can edit these:
-            { label: "L/R No.", type: "text", key: "lr_no" },
-            { label: "Transport Mode", type: "text", key: "transport_mode" },
-            
+            { label: "Delivery Type", type: "select", options: DATA.deliveryTypes, key: "delivery_type" },
+            { label: "L/R No.", type: "text", key: "lr_no", group: "intra" },
+            { label: "Transport Mode", type: "text", key: "transport_mode", group: "intra" },
+            { label: "Signed Copy Recvd?", type: "select", options: ["No", "Yes"], key: "signed_copy", group: "inter" },
             { label: "Deliv Person", type: "select", options: DATA.employees, key: "deliv_by" },
             { label: "Bill Made By", type: "select", options: DATA.employees, key: "made_by" },
             { label: "Checked By", type: "select", options: DATA.employees, key: "checked_by" },
             { label: "Remark", type: "text", key: "remark" }
         ],
-        IN_RET: [
+        PURCHASE_RET: [
             { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
             { label: "Return Date", type: "date", key: "date_main" },
-            { label: "Target Brand", type: "select", options: DATA.brands, key: "party" },
+            { label: "Location (Filter)", type: "text", key: "location_filter", list: "locations" },
+            { label: "Purchaser/Cust", type: "text", key: "party", list: "customers" }, 
+            { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
             { label: "Against Bill No", type: "text", key: "against_bill" },
-            { label: "Credit note No", type: "text", key: "credit_note_no" },
             { label: "Pieces", type: "number", key: "pcs" },
             { label: "Amount", type: "number", key: "amount" },
-            { label: "Sent By (Remark)", type: "text", key: "remark" }
+            { label: "Sent By (Remark)", type: "text", key: "remark" },
+            { label: "Recvd By", type: "select", options: DATA.employees, key: "Recvd_by" },
+            { label: "Approved By", type: "select", options: DATA.employees, key: "approved_by" },
+            { label: "Transport recieved", type: "text", key: "transport"},
+            { label: "L/R No.", type: "text", key: "L/R_no" }
         ],
-        OUT_RET: [
+        SALES_RET: [
             { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
             { label: "Return Date", type: "date", key: "date_main" },
-            { label: "Customer", type: "text", key: "party" },
+            { label: "Location (Filter)", type: "text", key: "location_filter", list: "locations" },
+            { label: "Purchaser/Cust", type: "text", key: "party", list: "customers" }, 
             { label: "Brand", type: "select", options: DATA.brands, key: "brand" },
             { label: "Against Bill No", type: "text", key: "against_bill" },
             { label: "Pieces", type: "number", key: "pcs" },
@@ -202,47 +242,33 @@
     };
 
     // --- STATE ---
-    let currentMode = "INWARD";
+    let currentMode = "PURCHASE";
     let allLogs = [];
     let isAdmin = false;
     let editingId = null;
 
-    // --- LOGIN FUNCTIONS ---
-    window.attemptLogin = () => {
+    // --- AUTH ---
+    window.attemptLogin = async () => {
         const u = document.getElementById('username').value;
         const p = document.getElementById('password').value;
-        const err = document.getElementById('login-error');
-
-        if (u === "admin" && p === "admin") {
-            isAdmin = true;
-            loadApp();
-        } else if (u === "staff" && p === "123") {
-            isAdmin = false;
-            loadApp();
+        if ((u === "admin" && p === "admin") || (u === "staff" && p === "123")) {
+            isAdmin = (u === "admin");
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            document.getElementById('actions-header').style.display = 'table-cell';
+            
+            await loadCustomers();
+            renderForm();
+            fetchData();
         } else {
-            err.innerText = "Invalid Username or Password";
+            document.getElementById('login-error').innerText = "Invalid Creds";
         }
     };
+    window.logout = () => location.reload();
 
-    function loadApp() {
-        document.getElementById('login-overlay').style.display = 'none';
-        document.getElementById('app-container').style.display = 'block';
-        // Always show Actions column now because Staff also has an 'Edit' button
-        document.getElementById('actions-header').style.display = 'table-cell';
-        renderForm();
-        fetchData();
-    }
-    
-    window.logout = () => {
-        location.reload();
-    };
-
-    // --- APP FUNCTIONS ---
-
+    // --- APP CORE ---
     window.setMode = (mode) => {
-        // If switching tabs while editing, cancel edit first
         if(editingId) cancelEdit();
-        
         currentMode = mode;
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         event.target.classList.add('active');
@@ -250,20 +276,95 @@
         renderForm();
     };
 
+    window.updateVisibility = () => {
+        if (currentMode !== 'SALES') return;
+        const typeSelect = document.querySelector('select[name="delivery_type"]');
+        if (!typeSelect) return;
+        const type = typeSelect.value;
+        
+        document.querySelectorAll('.group-intra').forEach(el => el.classList.toggle('hidden-field', type !== 'Intra-city'));
+        document.querySelectorAll('.group-inter').forEach(el => el.classList.toggle('hidden-field', type !== 'Inter-city'));
+    };
+
+    // --- DYNAMIC LINKED FIELDS LOGIC ---
+    window.updateCustomerLists = () => {
+        // Only run for SALES mode
+        if (currentMode !== 'SALES') return;
+
+        const locInput = document.querySelector('input[name="location_filter"]');
+        const custInput = document.querySelector('input[name="party"]');
+        if (!locInput || !custInput) return;
+
+        const selectedLoc = locInput.value.toLowerCase().trim();
+        const custDatalist = document.getElementById('dl-customers');
+        
+        // 1. FILTER CUSTOMERS based on Location
+        custDatalist.innerHTML = '';
+        const filteredCusts = selectedLoc === '' 
+            ? CUSTOMER_DB 
+            : CUSTOMER_DB.filter(c => c.location.toLowerCase().includes(selectedLoc));
+            
+        filteredCusts.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.name;
+            custDatalist.appendChild(opt);
+        });
+    };
+
+    window.handleCustomerSelect = (e) => {
+        const custName = e.target.value;
+        const locInput = document.querySelector('input[name="location_filter"]');
+        
+        // Find exact customer match
+        const match = CUSTOMER_DB.find(c => c.name === custName);
+        if (match && locInput) {
+            locInput.value = match.location; // Auto-fill Location
+            updateCustomerLists(); // Re-filter list (optional, keeps UI consistent)
+        }
+    };
+
     window.renderForm = (dataToFill = null) => {
         const container = document.getElementById('dynamic-fields');
         container.innerHTML = '';
 
-        // 1. DETERMINE IF THIS IS A STAFF EDIT
         const isStaffEdit = (editingId !== null && !isAdmin);
-        const staffAllowedFields = ['lr_no', 'transport_mode', 'remark', 'L/R_no', 'transport'];
+        const staffAllowedFields = ['lr_no', 'transport_mode', 'remark', 'L/R_no', 'transport', 'signed_copy', 'delivery_type'];
         
+        // Create DataLists Containers (Hidden)
+        const dlContainer = document.createElement('div');
+        dlContainer.style.display = 'none';
+        
+        // 1. Locations Datalist
+        const uniqueLocs = [...new Set(CUSTOMER_DB.map(c => c.location))].sort();
+        const locDL = document.createElement('datalist');
+        locDL.id = "dl-locations";
+        uniqueLocs.forEach(loc => {
+            const opt = document.createElement('option');
+            opt.value = loc;
+            locDL.appendChild(opt);
+        });
+        dlContainer.appendChild(locDL);
+
+        // 2. Customers Datalist (Initially full)
+        const custDL = document.createElement('datalist');
+        custDL.id = "dl-customers";
+        CUSTOMER_DB.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.name;
+            custDL.appendChild(opt);
+        });
+        dlContainer.appendChild(custDL);
+        container.appendChild(dlContainer);
+
+        // Render Fields
         FORMS[currentMode].forEach(field => {
             const group = document.createElement('div');
             group.className = 'form-group';
+            if (field.group) group.classList.add(`group-${field.group}`);
             
             const label = document.createElement('label');
             label.innerText = field.label;
+            group.appendChild(label);
             
             let input;
             if (field.type === 'select') {
@@ -278,91 +379,80 @@
                 input = document.createElement('input');
                 input.type = field.type;
                 if(field.type === 'number') input.step = "0.01";
-            }
-            input.name = field.key;
-            
-            // 2. FILL DATA
-            if(dataToFill && dataToFill[field.key]) {
-                input.value = dataToFill[field.key];
-            }
-
-            // 3. APPLY STAFF LOCK
-            if (isStaffEdit) {
-                if (!staffAllowedFields.includes(field.key)) {
-                    input.disabled = true;
-                    input.style.backgroundColor = "#e5e7eb";
-                    input.style.color = "#888";
-                    input.style.cursor = "not-allowed";
+                
+                // Attach Datalist if specified
+                if (field.list === 'locations') {
+                    input.setAttribute('list', 'dl-locations');
+                    input.oninput = updateCustomerLists; // Trigger filter on type
+                    input.onchange = updateCustomerLists; 
+                }
+                if (field.list === 'customers') {
+                    input.setAttribute('list', 'dl-customers');
+                    input.onchange = handleCustomerSelect; // Trigger auto-fill on select
                 }
             }
+            
+            input.name = field.key;
+            if (field.key === 'delivery_type') input.onchange = updateVisibility;
 
-            // 4. REQUIRED LOGIC
-            // Allow optional fields to be empty
-            const optionalFields = ['remark', 'against_bill', 'credit_note_no', 'lr_no', 'transport_mode', 'L/R_no', 'transport'];
-            if (!optionalFields.includes(field.key)) {
-                input.required = true;
+            if(dataToFill && dataToFill[field.key]) input.value = dataToFill[field.key];
+
+            if (isStaffEdit && !staffAllowedFields.includes(field.key)) {
+                input.disabled = true;
+                input.style.backgroundColor = "#e5e7eb";
             }
+
+            const optionalFields = ['remark', 'against_bill', 'credit_note_no', 'lr_no', 'transport_mode', 'L/R_no', 'transport', 'signed_copy', 'location_filter'];
+            if (!optionalFields.includes(field.key)) input.required = true;
             
             if(field.type === 'date' && !dataToFill) input.valueAsDate = new Date();
-
-            group.appendChild(label);
+            
             group.appendChild(input);
             container.appendChild(group);
         });
+
+        if (currentMode === 'SALES') updateVisibility();
     };
 
-    // --- SUBMIT (CREATE OR UPDATE) ---
     window.submitData = async (e) => {
         e.preventDefault();
         const btn = document.getElementById('save-btn');
         const originalText = btn.innerText;
-        btn.innerText = editingId ? "Updating..." : "Saving...";
+        btn.innerText = "Saving...";
         btn.disabled = true;
 
         const formData = new FormData(e.target);
-        const data = { 
-            type: currentMode, 
-            timestamp: new Date() 
-        };
+        const data = { type: currentMode, timestamp: new Date() };
         
-        // MERGE OLD DATA: Required because disabled inputs are not sent in FormData
         if (editingId && !isAdmin) {
              const oldLog = allLogs.find(l => l.id === editingId);
-             Object.assign(data, oldLog); // Start with old data
-             delete data.id; // Remove ID so we don't save it inside the document
+             Object.assign(data, oldLog); 
+             delete data.id; 
         }
-        
-        // Overwrite with new data from form
         formData.forEach((value, key) => data[key] = value);
 
         try {
             if (editingId) {
-                const docRef = doc(db, "logs", editingId);
-                await updateDoc(docRef, data);
-                alert("Updated Successfully!");
+                await updateDoc(doc(db, "logs", editingId), data);
+                alert("Updated!");
                 cancelEdit();
             } else {
                 await addDoc(collection(db, "logs"), data);
-                alert("Saved Successfully!");
+                alert("Saved!");
                 e.target.reset();
                 renderForm(); 
             }
             fetchData(); 
-        } catch (error) {
-            console.error("Error saving: ", error);
-            alert("Error saving data. Check console.");
-        }
+        } catch (error) { console.error(error); alert("Error saving."); }
         btn.innerText = originalText;
         btn.disabled = false;
     };
 
     async function fetchData() {
         const q = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(50));
-        const querySnapshot = await getDocs(q);
+        const snap = await getDocs(q);
         allLogs = [];
-        querySnapshot.forEach((doc) => {
-            allLogs.push({ id: doc.id, ...doc.data() });
-        });
+        snap.forEach((doc) => allLogs.push({ id: doc.id, ...doc.data() }));
         renderTable();
     }
 
@@ -370,93 +460,41 @@
         const tbody = document.querySelector('#dataTable tbody');
         const search = document.getElementById('searchInput').value.toLowerCase();
         tbody.innerHTML = '';
-
-        const filtered = allLogs.filter(log => {
-            const str = Object.values(log).join(' ').toLowerCase();
-            return str.includes(search);
-        });
-
+        const filtered = allLogs.filter(log => Object.values(log).join(' ').toLowerCase().includes(search));
+        
         filtered.forEach(log => {
             const tr = document.createElement('tr');
-            
             const date = log.date_bill || log.date_lr || log.date_main || "N/A";
             const party = log.party || log.brand || "-";
-            
-            let actionButtons = '';
-            if (isAdmin) {
-                actionButtons = `
-                    <td>
-                        <button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button>
-                        <button class="action-btn btn-delete" onclick="deleteEntry('${log.id}')">Del</button>
-                    </td>
-                `;
-            } else {
-                // Staff Edit Button
-                actionButtons = `
-                    <td>
-                        <button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button>
-                    </td>
-                `;
-            }
+            const btnHtml = isAdmin ? 
+                `<button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button><button class="action-btn btn-delete" onclick="deleteEntry('${log.id}')">Del</button>` : 
+                `<button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button>`;
 
-            tr.innerHTML = `
-                <td>${date}</td>
-                <td><span style="font-size:0.8em; padding:2px 5px; border-radius:4px; background:#e5e7eb;">${log.type}</span></td>
-                <td>${log.firm}</td>
-                <td>${party}</td>
-                <td>${log.bill_no || log.against_bill || '-'}</td>
-                <td>${log.pcs || '-'}</td>
-                <td>${log.amount || '-'}</td>
-                ${actionButtons}
-            `;
+            tr.innerHTML = `<td>${date}</td><td><span style="font-size:0.8em; padding:2px 5px; background:#e5e7eb;">${log.type}</span></td><td>${log.firm}</td><td>${party}</td><td>${log.bill_no || log.against_bill || '-'}</td><td>${log.pcs || '-'}</td><td>${log.amount || '-'}</td><td>${btnHtml}</td>`;
             tbody.appendChild(tr);
         });
     }
 
-    window.deleteEntry = async (id) => {
-        if(!confirm("Are you sure you want to delete this log?")) return;
-        try {
-            await deleteDoc(doc(db, "logs", id));
-            fetchData();
-        } catch (error) {
-            console.error("Delete Error:", error);
-            alert("Could not delete. Check Firebase Rules.");
-        }
-    };
+    window.deleteEntry = async (id) => { if(confirm("Delete?")) { await deleteDoc(doc(db, "logs", id)); fetchData(); }};
 
     window.startEdit = (id) => {
         const log = allLogs.find(l => l.id === id);
         if (!log) return;
-
-        // 1. Set Mode (Clears previous form)
         setMode(log.type);
-        
-        // 2. IMPORTANT: Set ID *BEFORE* rendering the form
-        // This ensures the renderForm function knows we are in 'Edit Mode'
         editingId = id; 
-        
-        // 3. Render Form (Now the 'disabled' logic will work)
         renderForm(log);
-        
-        // UI Updates
         document.getElementById('edit-notice').style.display = 'block';
-        const btn = document.getElementById('save-btn');
-        btn.innerText = isAdmin ? "Update Entry" : "Update L/R Info"; 
-        btn.classList.add('updating');
-        
+        document.getElementById('save-btn').innerText = isAdmin ? "Update Entry" : "Update Delivery Info"; 
         document.querySelector('.container').scrollIntoView({ behavior: 'smooth' });
     };
 
     window.cancelEdit = () => {
         editingId = null;
         document.getElementById('edit-notice').style.display = 'none';
-        const btn = document.getElementById('save-btn');
-        btn.innerText = "Save Entry";
-        btn.classList.remove('updating');
+        document.getElementById('save-btn').innerText = "Save Entry";
         document.getElementById('logForm').reset();
         renderForm(); 
     };
-
 </script>
 </body>
 </html>
