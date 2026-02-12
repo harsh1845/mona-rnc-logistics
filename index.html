@@ -397,7 +397,7 @@
                 delBtn.className = "action-btn btn-delete";
                 delBtn.innerText = "Del";
                 delBtn.style.marginLeft = "5px";
-                delBtn.onclick = () => deleteItemLog(log.id, manageType, delBtn);
+                delBtn.onclick = () => deleteItemLog(log.id, delBtn);
                 actionTd.appendChild(delBtn);
             }
             if(isAdmin || true) tr.appendChild(actionTd);
