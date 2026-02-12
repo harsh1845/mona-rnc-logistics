@@ -11,23 +11,19 @@
         
         .container { max-width: 1000px; margin: 0 auto; display: none; }
         
-        /* Login Overlay */
         #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f3f4f6; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: center; }
         .login-box input { width: 90%; margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
         .login-box button { width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
 
-        /* Tabs */
         .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .tab { padding: 10px 20px; background: #ddd; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .tab.active { background: var(--primary); color: var(--white); }
         
-        /* Special Manage Tabs */
         .sub-tabs { display: flex; gap: 5px; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
         .sub-tab { padding: 5px 15px; background: white; border: 1px solid #ccc; border-radius: 15px; cursor: pointer; font-size: 0.9rem; }
         .sub-tab.active { background: #374151; color: white; border-color: #374151; }
 
-        /* Forms */
         .card { background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
         .form-group { display: flex; flex-direction: column; } 
@@ -38,13 +34,11 @@
         input, select, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; width: 100%; box-sizing: border-box; }
         button.submit-btn { background: #10b981; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; margin-top: 20px; width: 100%; }
         
-        /* Manage Section Styles */
         .manage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .manage-list { max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; }
         .manage-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
         .manage-item:hover { background: #f9fafb; }
         
-        /* Table */
         .table-controls { display: flex; justify-content: space-between; margin-bottom: 10px; }
         table { width: 100%; border-collapse: collapse; background: white; font-size: 0.9rem; }
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
@@ -78,7 +72,7 @@
         <h2>Logistics Management</h2>
         <div style="text-align:right;">
              <button onclick="logout()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer;">Logout</button>
-             <button onclick="forceRefreshData()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer; font-size:0.8rem;">🔄 Sync Data</button>
+             <button onclick="forceRefreshData()" style="background:#eee; border:none; padding:5px 10px; cursor:pointer; font-size:0.8rem;">⚠️ Force Sync</button>
         </div>
     </div>
     
@@ -121,8 +115,7 @@
 
             <div>
                 <input type="text" id="manage-search" placeholder="Search..." onkeyup="renderManageList()">
-                <div class="manage-list" id="manage-list-container">
-                    </div>
+                <div class="manage-list" id="manage-list-container"></div>
             </div>
         </div>
     </div>
@@ -153,11 +146,10 @@
 </div>
 
 <script type="module">
-    // --- IMPORT FIREBASE ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, updateDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    // --- PASTE YOUR FIREBASE CONFIG HERE ---
+    // --- CONFIG ---
     const firebaseConfig = {
         apiKey: "AIzaSyBBszqQlych7F1g82TA37y6Bvhj6EwFfdg",
         authDomain: "logistics-app-mona-rnc.firebaseapp.com",
@@ -171,23 +163,152 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- STATE & DATA ---
+    // --- STATE ---
     let currentMode = "PURCHASE";
-    let manageType = "CUSTOMER"; // CUSTOMER, SELLER, EMPLOYEE
+    let manageType = "CUSTOMER"; 
     let allLogs = [];
     let isAdmin = false;
     let editingId = null;
-    
-    // CACHED DATA
     let CUSTOMER_DB = [];
     let EMPLOYEE_DB = [];
 
-    // CONSTANTS
     const DATA = {
         firms: ["Mona", "RNC"],
         brands: ["Jockey", "Amante", "Sweet Dreams"],
         deliveryTypes: ["Intra-city", "Inter-city"]
     };
+
+    // --- QUOTA & ERROR HANDLING ---
+    const handleFirebaseError = (error) => {
+        console.error("Firebase Error:", error);
+        if (error.code === 'resource-exhausted') {
+            alert("⚠️ DAILY QUOTA EXCEEDED\n\nYou have used your 50,000 daily reads. The database will not save or delete until tomorrow. Do NOT clear cache.");
+        } else {
+            alert("Error: " + error.message);
+        }
+    };
+
+    // --- DATABASE ACTIONS (Optimized) ---
+
+    // 1. DELETE
+    const deleteItem = async (id, type, btnElement) => {
+        if (!confirm(`Are you sure you want to delete this ${type}?`)) return;
+        
+        const originalText = btnElement.innerText;
+        btnElement.innerText = "...";
+        btnElement.disabled = true;
+        let collName = (type === 'EMPLOYEE') ? "employees" : "customers";
+
+        try {
+            await deleteDoc(doc(db, collName, id));
+            
+            // Local Update (Saves a Read)
+            if (type === 'EMPLOYEE') {
+                EMPLOYEE_DB = EMPLOYEE_DB.filter(item => item.id !== id);
+                localStorage.setItem('employee_db', JSON.stringify(EMPLOYEE_DB));
+            } else {
+                CUSTOMER_DB = CUSTOMER_DB.filter(item => item.id !== id);
+                localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
+            }
+            renderManageList(); 
+            alert("Deleted Successfully");
+        } catch (error) {
+            handleFirebaseError(error);
+            btnElement.innerText = originalText;
+            btnElement.disabled = false;
+        }
+    };
+
+    // 2. ADD
+    window.submitManageData = async (e) => {
+        e.preventDefault();
+        const nameInput = document.getElementById('new-name');
+        const locInput = document.getElementById('new-location');
+        const name = nameInput.value.trim().toUpperCase();
+        let collName = "customers"; 
+        let data = { name: name };
+        
+        if (manageType === 'CUSTOMER') {
+            data.location = locInput.value.trim().toUpperCase();
+        } else if (manageType === 'SELLER') {
+            data.location = "SUNDRY CREDITORS";
+        } else if (manageType === 'EMPLOYEE') {
+            collName = "employees";
+        }
+        
+        const id = name.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() + "_" + Math.floor(Math.random() * 1000);
+        
+        try {
+            await setDoc(doc(db, collName, id), data);
+            
+            // Local Update (Saves a Read)
+            const newItem = { id: id, ...data };
+            if (manageType === 'EMPLOYEE') {
+                EMPLOYEE_DB.push(newItem);
+                localStorage.setItem('employee_db', JSON.stringify(EMPLOYEE_DB));
+            } else {
+                CUSTOMER_DB.push(newItem);
+                localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
+            }
+            alert(`${manageType} Added Successfully!`);
+            nameInput.value = '';
+            locInput.value = '';
+            renderManageList(); 
+        } catch (error) { handleFirebaseError(error); }
+    };
+
+    // --- DATA LOADING (Quota Optimized) ---
+    async function loadAllData() {
+        await Promise.all([loadCustomers(), loadEmployees()]);
+    }
+    
+    // Only fetch if cache is EMPTY or User Force Syncs
+    window.forceRefreshData = () => {
+        if(confirm("Warning: This uses significant database quota. Only use if data is missing. Continue?")) {
+            localStorage.removeItem('customer_db');
+            localStorage.removeItem('employee_db');
+            // Small delay ensures storage is cleared before reload
+            setTimeout(() => {
+                location.reload();
+            }, 100);
+        }
+    }
+
+    async function loadCustomers() {
+        const cached = localStorage.getItem('customer_db');
+        if (cached && cached !== "[]") {
+            // USE CACHE
+            console.log("Using Cached Customers (Saves Reads)");
+            CUSTOMER_DB = JSON.parse(cached);
+        } else {
+            // DOWNLOAD (Costly)
+            console.log("Downloading Customers...");
+            try {
+                const q = query(collection(db, "customers"));
+                const snap = await getDocs(q);
+                CUSTOMER_DB = [];
+                snap.forEach(doc => CUSTOMER_DB.push({ id: doc.id, ...doc.data() }));
+                localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
+            } catch(e) { handleFirebaseError(e); }
+        }
+    }
+
+    async function loadEmployees() {
+        const cached = localStorage.getItem('employee_db');
+        if (cached && cached !== "[]") {
+            console.log("Using Cached Employees");
+            EMPLOYEE_DB = JSON.parse(cached);
+        } else {
+            console.log("Downloading Employees...");
+            try {
+                const q = query(collection(db, "employees"));
+                const snap = await getDocs(q);
+                EMPLOYEE_DB = [];
+                snap.forEach(doc => EMPLOYEE_DB.push({ id: doc.id, ...doc.data() }));
+                localStorage.setItem('employee_db', JSON.stringify(EMPLOYEE_DB));
+            } catch(e) { handleFirebaseError(e); }
+        }
+    }
 
     // --- AUTH ---
     window.attemptLogin = async () => {
@@ -198,10 +319,7 @@
             document.getElementById('login-overlay').style.display = 'none';
             document.getElementById('app-container').style.display = 'block';
             document.getElementById('actions-header').style.display = 'table-cell';
-            
-            // Permissions: Hide Employee Tab for Staff
             if(!isAdmin) document.getElementById('tab-emp').style.display = 'none';
-
             await loadAllData();
             renderForm();
             fetchData();
@@ -211,68 +329,141 @@
     };
     window.logout = () => location.reload();
 
-    // --- DATA LOADING (Customers + Employees) ---
-    async function loadAllData() {
-        await Promise.all([loadCustomers(), loadEmployees()]);
-    }
-    window.forceRefreshData = () => {
-        localStorage.clear();
-        location.reload();
-    }
+    // --- UI RENDERING ---
+    window.renderManageList = (overrideSearch) => {
+        const container = document.getElementById('manage-list-container');
+        let search = (typeof overrideSearch === 'string') ? overrideSearch : document.getElementById('manage-search').value;
+        search = search.toLowerCase();
+        container.innerHTML = '';
 
-    // 1. Load Customers
-    async function loadCustomers() {
-        const cached = localStorage.getItem('customer_db');
-        if (cached) {
-            CUSTOMER_DB = JSON.parse(cached);
-        } else {
-            const q = query(collection(db, "customers"));
-            const snap = await getDocs(q);
-            CUSTOMER_DB = [];
-            snap.forEach(doc => CUSTOMER_DB.push({ id: doc.id, ...doc.data() }));
-            localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
+        let list = [];
+        if (manageType === 'CUSTOMER') {
+            list = CUSTOMER_DB.filter(c => c.location !== "Sundry Creditors");
+        } else if (manageType === 'SELLER') {
+            list = CUSTOMER_DB.filter(c => c.location === "Sundry Creditors");
+        } else if (manageType === 'EMPLOYEE') {
+            list = EMPLOYEE_DB;
         }
-    }
 
-    // 2. Load Employees (Auto-Seeds if empty)
-    async function loadEmployees() {
-        const cached = localStorage.getItem('employee_db');
-        if (cached) {
-            EMPLOYEE_DB = JSON.parse(cached);
-        } else {
-            const q = query(collection(db, "employees"));
-            const snap = await getDocs(q);
-            EMPLOYEE_DB = [];
-            snap.forEach(doc => EMPLOYEE_DB.push({ id: doc.id, ...doc.data() }));
+        list = list.filter(item => item.name.toLowerCase().includes(search));
+        list.sort((a, b) => a.name.localeCompare(b.name));
+
+        list.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'manage-item';
             
-            // AUTO-SEED: If database is empty, upload placeholders
-            if (EMPLOYEE_DB.length === 0) {
-                console.log("Seeding default employees...");
-                const defaults = ["Damu", "Madam", "Mayur"];
-                for (const name of defaults) {
-                    await addDoc(collection(db, "employees"), { name: name });
-                }
-                // Fetch again
-                const snap2 = await getDocs(q);
-                EMPLOYEE_DB = [];
-                snap2.forEach(doc => EMPLOYEE_DB.push({ id: doc.id, ...doc.data() }));
+            const infoDiv = document.createElement('div');
+            let infoHtml = `<strong>${item.name}</strong>`;
+            if (manageType === 'CUSTOMER') infoHtml += ` <small>(${item.location})</small>`;
+            infoDiv.innerHTML = infoHtml;
+
+            const actionDiv = document.createElement('div');
+            if (isAdmin) {
+                const btn = document.createElement('button');
+                btn.className = 'action-btn btn-delete';
+                btn.innerText = 'Del';
+                btn.onclick = () => deleteItem(item.id, manageType, btn);
+                actionDiv.appendChild(btn);
             }
+            div.appendChild(infoDiv);
+            div.appendChild(actionDiv);
+            container.appendChild(div);
+        });
+    };
+
+    // --- TABLE & FORMS ---
+    window.renderTable = () => {
+        const tbody = document.querySelector('#dataTable tbody');
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        tbody.innerHTML = '';
+        const filtered = allLogs.filter(log => Object.values(log).join(' ').toLowerCase().includes(search));
+        
+        filtered.forEach(log => {
+            const tr = document.createElement('tr');
+            const date = log.date_bill || log.date_lr || log.date_main || "N/A";
+            const party = log.party || log.brand || "-";
             
-            localStorage.setItem('employee_db', JSON.stringify(EMPLOYEE_DB));
+            tr.innerHTML = `<td>${date}</td><td><span style="font-size:0.8em; padding:2px 5px; background:#e5e7eb;">${log.type}</span></td><td>${log.firm}</td><td>${party}</td><td>${log.bill_no || log.against_bill || '-'}</td><td>${log.pcs || '-'}</td><td>${log.amount || '-'}</td>`;
+
+            const actionTd = document.createElement('td');
+            const editBtn = document.createElement('button');
+            editBtn.className = "action-btn btn-edit";
+            editBtn.innerText = "Edit";
+            editBtn.onclick = () => window.startEdit(log.id);
+            actionTd.appendChild(editBtn);
+
+            if (isAdmin) {
+                const delBtn = document.createElement('button');
+                delBtn.className = "action-btn btn-delete";
+                delBtn.innerText = "Del";
+                delBtn.style.marginLeft = "5px";
+                delBtn.onclick = () => deleteItemLog(log.id, manageType, delBtn);
+                actionTd.appendChild(delBtn);
+            }
+            if(isAdmin || true) tr.appendChild(actionTd);
+            tbody.appendChild(tr);
+        });
+    };
+
+    const deleteItemLog = async (id, btnElement) => { 
+        if(!confirm("Delete Log?")) return;
+        btnElement.innerText = "...";
+        try {
+            await deleteDoc(doc(db, "logs", id)); 
+            fetchData(); 
+        } catch(e) { handleFirebaseError(e); btnElement.innerText = "Del"; }
+    };
+
+    window.submitData = async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('save-btn');
+        btn.innerText = "Saving...";
+        btn.disabled = true;
+        const formData = new FormData(e.target);
+        const data = { type: currentMode, timestamp: new Date() };
+        if (editingId && !isAdmin) {
+             const oldLog = allLogs.find(l => l.id === editingId);
+             Object.assign(data, oldLog); 
+             delete data.id; 
         }
+        formData.forEach((value, key) => data[key] = value);
+        try {
+            if (editingId) {
+                await updateDoc(doc(db, "logs", editingId), data);
+                alert("Updated!");
+                cancelEdit();
+            } else {
+                await addDoc(collection(db, "logs"), data);
+                alert("Saved!");
+                e.target.reset();
+                renderForm(); 
+            }
+            fetchData(); 
+        } catch (error) { handleFirebaseError(error); }
+        btn.innerText = "Save Entry";
+        btn.disabled = false;
+    };
+
+    async function fetchData() {
+        const q = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(50));
+        try {
+            const snap = await getDocs(q);
+            allLogs = [];
+            snap.forEach((doc) => allLogs.push({ id: doc.id, ...doc.data() }));
+            renderTable();
+        } catch(e) { handleFirebaseError(e); }
     }
 
-    // --- NAVIGATION LOGIC ---
+    // --- FORM LOGIC (Unchanged) ---
     window.setMode = (mode) => {
         currentMode = mode;
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         event.target.classList.add('active');
-
         if (mode === 'MANAGE') {
             document.getElementById('log-entry-card').style.display = 'none';
             document.getElementById('table-card').style.display = 'none';
             document.getElementById('manage-ui-card').style.display = 'block';
-            setManageType('CUSTOMER'); // Default sub-tab
+            setManageType('CUSTOMER'); 
         } else {
             if(editingId) cancelEdit();
             document.getElementById('log-entry-card').style.display = 'block';
@@ -283,165 +474,46 @@
         }
     };
 
-    // --- MANAGE DATA LOGIC ---
     window.setManageType = (type) => {
         manageType = type;
-        
-        // Update UI Tabs
         document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-        // Find the button with correct onclick and set active
         const tabs = Array.from(document.querySelectorAll('.sub-tab'));
         const activeTab = tabs.find(t => t.innerText.toUpperCase().startsWith(type) || (type === 'SELLER' && t.innerText === 'Sellers'));
         if(activeTab) activeTab.classList.add('active');
-
-        // Update Labels & Inputs
         const label = type.charAt(0) + type.slice(1).toLowerCase();
         document.getElementById('manage-type-label').innerText = label;
         document.getElementById('new-name').value = '';
-        document.getElementById('new-location').value = '';
-
-        // Show/Hide Location Input (Only Customers need Location input)
+        const loc = document.getElementById('new-location');
+        loc.value = '';
         if (type === 'CUSTOMER') {
-            document.getElementById('new-location').style.display = 'block';
-            document.getElementById('new-location').required = true;
+            loc.style.display = 'block';
+            loc.required = true;
         } else {
-            document.getElementById('new-location').style.display = 'none';
-            document.getElementById('new-location').required = false;
+            loc.style.display = 'none';
+            loc.required = false;
         }
-
         renderManageList();
     };
 
-    window.renderManageList = (overrideSearch) => {
-        const container = document.getElementById('manage-list-container');
-        
-        // LOGIC CHANGE: 
-        // If we typed in the "New Name" box (overrideSearch), use that.
-        // Otherwise, use the standard "Search" box on the right.
-        let search = (typeof overrideSearch === 'string') 
-            ? overrideSearch 
-            : document.getElementById('manage-search').value;
-            
-        search = search.toLowerCase();
-        container.innerHTML = '';
-
-        let list = [];
-        
-        if (manageType === 'CUSTOMER') {
-            list = CUSTOMER_DB.filter(c => c.location !== "Sundry Creditors");
-        } else if (manageType === 'SELLER') {
-            list = CUSTOMER_DB.filter(c => c.location === "Sundry Creditors");
-        } else if (manageType === 'EMPLOYEE') {
-            list = EMPLOYEE_DB;
-        }
-
-        // Filter by Search
-        list = list.filter(item => item.name.toLowerCase().includes(search));
-
-        // Sort A-Z
-        list.sort((a, b) => a.name.localeCompare(b.name));
-
-        list.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'manage-item';
-            
-            let info = `<strong>${item.name}</strong>`;
-            if (manageType === 'CUSTOMER') info += ` <small>(${item.location})</small>`;
-            
-            let btn = '';
-            if (isAdmin) {
-                btn = `<button class="action-btn btn-delete" onclick="deleteItem('${item.id}', '${manageType}')">Del</button>`;
-            }
-
-            div.innerHTML = `<div>${info}</div><div>${btn}</div>`;
-            container.appendChild(div);
-        });
+    window.startEdit = (id) => {
+        const log = allLogs.find(l => l.id === id);
+        if (!log) return;
+        setMode(log.type);
+        editingId = id; 
+        renderForm(log);
+        document.getElementById('edit-notice').style.display = 'block';
+        document.getElementById('save-btn').innerText = isAdmin ? "Update Entry" : "Update Delivery Info"; 
+        document.querySelector('.container').scrollIntoView({ behavior: 'smooth' });
     };
 
-    window.submitManageData = async (e) => {
-        e.preventDefault();
-        const nameInput = document.getElementById('new-name');
-        const locInput = document.getElementById('new-location');
-        const name = nameInput.value.trim().toUpperCase();
-        let location = "";
-
-        // 1. Prepare Data
-        let collName = "customers"; 
-        let data = { name: name };
-
-        if (manageType === 'CUSTOMER') {
-            location = locInput.value.trim().toUpperCase();
-            data.location = location;
-        } else if (manageType === 'SELLER') {
-            data.location = "SUNDRY CREDITORS"; // Auto-set location for sellers
-        } else if (manageType === 'EMPLOYEE') {
-            collName = "employees";
-        }
-
-        // Generate ID
-        const id = name.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() + "_" + Math.floor(Math.random() * 1000);
-
-        try {
-            // 2. Save to Cloud (Firebase)
-            await setDoc(doc(db, collName, id), data);
-            
-            // 3. INSTANT UPDATE (The Fix)
-            // Instead of re-downloading, we just push the new guy into our current list
-            const newItem = { id: id, ...data };
-            
-            if (manageType === 'EMPLOYEE') {
-                EMPLOYEE_DB.push(newItem);
-                // Update the browser cache so it remembers next time
-                localStorage.setItem('employee_db', JSON.stringify(EMPLOYEE_DB));
-            } else {
-                // Both Customers and Sellers go into CUSTOMER_DB
-                CUSTOMER_DB.push(newItem);
-                localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
-            }
-
-            alert(`${manageType} Added Successfully!`);
-            
-            // 4. Reset Form & Refresh List UI Only
-            nameInput.value = '';
-            locInput.value = '';
-            renderManageList(); 
-
-        } catch (error) {
-            console.error(error);
-            alert("Error adding data.");
-        }
+    window.cancelEdit = () => {
+        editingId = null;
+        document.getElementById('edit-notice').style.display = 'none';
+        document.getElementById('save-btn').innerText = "Save Entry";
+        document.getElementById('logForm').reset();
+        renderForm(); 
     };
 
-    window.deleteItem = async (id, type) => {
-        if (!confirm("Delete this item? This cannot be undone.")) return;
-        
-        let collName = (type === 'EMPLOYEE') ? "employees" : "customers";
-
-        try {
-            // 1. Delete from Cloud
-            await deleteDoc(doc(db, collName, id));
-            
-            // 2. INSTANT UPDATE (The Fix)
-            if (type === 'EMPLOYEE') {
-                // Remove from local array
-                EMPLOYEE_DB = EMPLOYEE_DB.filter(item => item.id !== id);
-                localStorage.setItem('employee_db', JSON.stringify(EMPLOYEE_DB));
-            } else {
-                // Remove from local array
-                CUSTOMER_DB = CUSTOMER_DB.filter(item => item.id !== id);
-                localStorage.setItem('customer_db', JSON.stringify(CUSTOMER_DB));
-            }
-
-            // 3. Refresh List UI Only
-            renderManageList();
-            
-        } catch (error) {
-            console.error(error);
-            alert("Error deleting.");
-        }
-    };
-
-    // --- MAIN FORM CONFIGURATION ---
     const FORMS = {
         PURCHASE: [
             { label: "Firm", type: "select", options: DATA.firms, key: "firm" },
@@ -506,101 +578,58 @@
     window.renderForm = (dataToFill = null) => {
         const container = document.getElementById('dynamic-fields');
         container.innerHTML = '';
-
         const isStaffEdit = (editingId !== null && !isAdmin);
         const staffAllowedFields = ['lr_no', 'transport_mode', 'remark', 'L/R_no', 'transport', 'signed_copy', 'delivery_type'];
         
-        // --- BUILD DYNAMIC DATALISTS ---
         const dlContainer = document.createElement('div');
         dlContainer.style.display = 'none';
 
-        // 1. Locations
         const uniqueLocs = [...new Set(CUSTOMER_DB.map(c => c.location))].sort();
         const locDL = document.createElement('datalist');
         locDL.id = "dl-locations";
-        uniqueLocs.forEach(l => {
-            const o = document.createElement('option');
-            o.value = l;
-            locDL.appendChild(o);
-        });
+        uniqueLocs.forEach(l => { const o = document.createElement('option'); o.value = l; locDL.appendChild(o); });
         dlContainer.appendChild(locDL);
 
-        // 2. Customers
         const custDL = document.createElement('datalist');
         custDL.id = "dl-customers";
-        // Filter out "Sundry Creditors" from standard customer list
-        CUSTOMER_DB.filter(c => c.location !== "Sundry Creditors").forEach(c => {
-            const o = document.createElement('option');
-            o.value = c.name;
-            custDL.appendChild(o);
-        });
+        CUSTOMER_DB.filter(c => c.location !== "Sundry Creditors").forEach(c => { const o = document.createElement('option'); o.value = c.name; custDL.appendChild(o); });
         dlContainer.appendChild(custDL);
 
-        // 3. Purchase Sellers (Sundry + Defaults)
         const sundrySellers = CUSTOMER_DB.filter(c => c.location === "Sundry Creditors").map(c => c.name);
         const allSellers = [...new Set(["Milton", "Apna Bazaar", "Karachu", ...sundrySellers])].sort();
         const sellerDL = document.createElement('datalist');
         sellerDL.id = "dl-purchase_sellers";
-        allSellers.forEach(n => {
-            const o = document.createElement('option');
-            o.value = n;
-            sellerDL.appendChild(o);
-        });
+        allSellers.forEach(n => { const o = document.createElement('option'); o.value = n; sellerDL.appendChild(o); });
         dlContainer.appendChild(sellerDL);
 
-        // 4. Employees
         const empDL = document.createElement('datalist');
         empDL.id = "dl-employees";
-        EMPLOYEE_DB.forEach(e => {
-            const o = document.createElement('option');
-            o.value = e.name;
-            empDL.appendChild(o);
-        });
+        EMPLOYEE_DB.forEach(e => { const o = document.createElement('option'); o.value = e.name; empDL.appendChild(o); });
         dlContainer.appendChild(empDL);
-
         container.appendChild(dlContainer);
 
-        // --- RENDER INPUTS ---
         FORMS[currentMode].forEach(field => {
             const group = document.createElement('div');
             group.className = 'form-group';
             if (field.group) group.classList.add(`group-${field.group}`);
-            
             const label = document.createElement('label');
             label.innerText = field.label;
             group.appendChild(label);
-            
             let input;
             if (field.type === 'select') {
                 input = document.createElement('select');
-                field.options.forEach(opt => {
-                    const option = document.createElement('option');
-                    option.value = opt;
-                    option.innerText = opt;
-                    input.appendChild(option);
-                });
+                field.options.forEach(opt => { const option = document.createElement('option'); option.value = opt; option.innerText = opt; input.appendChild(option); });
             } else {
                 input = document.createElement('input');
                 input.type = field.type;
                 if(field.type === 'number') input.step = "0.01";
-                
-                // Attach DataList
-                if (field.list) {
-                    input.setAttribute('list', `dl-${field.list}`);
-                }
-                
-                // Special Interactions
+                if (field.list) input.setAttribute('list', `dl-${field.list}`);
                 if (field.key === 'location_filter') {
                     input.oninput = (e) => {
                         const loc = e.target.value.toLowerCase();
                         const targetList = document.getElementById('dl-customers');
                         targetList.innerHTML = '';
-                        CUSTOMER_DB.filter(c => c.location.toLowerCase().includes(loc) && c.location !== "Sundry Creditors")
-                            .forEach(c => {
-                                const o = document.createElement('option');
-                                o.value = c.name;
-                                targetList.appendChild(o);
-                            });
+                        CUSTOMER_DB.filter(c => c.location.toLowerCase().includes(loc) && c.location !== "Sundry Creditors").forEach(c => { const o = document.createElement('option'); o.value = c.name; targetList.appendChild(o); });
                     };
                 }
                 if (field.key === 'party' && currentMode === 'SALES') {
@@ -611,22 +640,16 @@
                     };
                 }
             }
-            
             input.name = field.key;
             if (field.key === 'delivery_type') input.onchange = updateVisibility;
             if(dataToFill && dataToFill[field.key]) input.value = dataToFill[field.key];
-            if (isStaffEdit && !staffAllowedFields.includes(field.key)) {
-                input.disabled = true;
-                input.style.backgroundColor = "#e5e7eb";
-            }
+            if (isStaffEdit && !staffAllowedFields.includes(field.key)) { input.disabled = true; input.style.backgroundColor = "#e5e7eb"; }
             const optionalFields = ['remark', 'against_bill', 'credit_note_no', 'lr_no', 'transport_mode', 'L/R_no', 'transport', 'signed_copy', 'location_filter'];
             if (!optionalFields.includes(field.key)) input.required = true;
             if(field.type === 'date' && !dataToFill) input.valueAsDate = new Date();
-            
             group.appendChild(input);
             container.appendChild(group);
         });
-
         if (currentMode === 'SALES') updateVisibility();
     };
 
@@ -638,87 +661,10 @@
         document.querySelectorAll('.group-intra').forEach(el => el.classList.toggle('hidden-field', type !== 'Intra-city'));
         document.querySelectorAll('.group-inter').forEach(el => el.classList.toggle('hidden-field', type !== 'Inter-city'));
     };
-
-    // --- STANDARD LOG SUBMIT ---
-    window.submitData = async (e) => {
-        e.preventDefault();
-        const btn = document.getElementById('save-btn');
-        btn.innerText = "Saving...";
-        btn.disabled = true;
-
-        const formData = new FormData(e.target);
-        const data = { type: currentMode, timestamp: new Date() };
-        if (editingId && !isAdmin) {
-             const oldLog = allLogs.find(l => l.id === editingId);
-             Object.assign(data, oldLog); 
-             delete data.id; 
-        }
-        formData.forEach((value, key) => data[key] = value);
-
-        try {
-            if (editingId) {
-                await updateDoc(doc(db, "logs", editingId), data);
-                alert("Updated!");
-                cancelEdit();
-            } else {
-                await addDoc(collection(db, "logs"), data);
-                alert("Saved!");
-                e.target.reset();
-                renderForm(); 
-            }
-            fetchData(); 
-        } catch (error) { console.error(error); alert("Error saving."); }
-        btn.innerText = "Save Entry";
-        btn.disabled = false;
-    };
-
-    async function fetchData() {
-        const q = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(50));
-        const snap = await getDocs(q);
-        allLogs = [];
-        snap.forEach((doc) => allLogs.push({ id: doc.id, ...doc.data() }));
-        renderTable();
-    }
-
-    window.renderTable = () => {
-        const tbody = document.querySelector('#dataTable tbody');
-        const search = document.getElementById('searchInput').value.toLowerCase();
-        tbody.innerHTML = '';
-        const filtered = allLogs.filter(log => Object.values(log).join(' ').toLowerCase().includes(search));
-        
-        filtered.forEach(log => {
-            const tr = document.createElement('tr');
-            const date = log.date_bill || log.date_lr || log.date_main || "N/A";
-            const party = log.party || log.brand || "-";
-            const btnHtml = isAdmin ? 
-                `<button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button><button class="action-btn btn-delete" onclick="deleteItemLog('${log.id}')">Del</button>` : 
-                `<button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button>`;
-
-            tr.innerHTML = `<td>${date}</td><td><span style="font-size:0.8em; padding:2px 5px; background:#e5e7eb;">${log.type}</span></td><td>${log.firm}</td><td>${party}</td><td>${log.bill_no || log.against_bill || '-'}</td><td>${log.pcs || '-'}</td><td>${log.amount || '-'}</td><td>${btnHtml}</td>`;
-            tbody.appendChild(tr);
-        });
-    }
-
-    window.deleteItemLog = async (id) => { if(confirm("Delete Log?")) { await deleteDoc(doc(db, "logs", id)); fetchData(); }};
-
-    window.startEdit = (id) => {
-        const log = allLogs.find(l => l.id === id);
-        if (!log) return;
-        setMode(log.type);
-        editingId = id; 
-        renderForm(log);
-        document.getElementById('edit-notice').style.display = 'block';
-        document.getElementById('save-btn').innerText = isAdmin ? "Update Entry" : "Update Delivery Info"; 
-        document.querySelector('.container').scrollIntoView({ behavior: 'smooth' });
-    };
-
-    window.cancelEdit = () => {
-        editingId = null;
-        document.getElementById('edit-notice').style.display = 'none';
-        document.getElementById('save-btn').innerText = "Save Entry";
-        document.getElementById('logForm').reset();
-        renderForm(); 
-    };
+    window.deleteItem = deleteItem;
+    window.deleteItemLog = deleteItemLog;
+    window.attemptLogin = attemptLogin;
+    window.forceRefreshData = forceRefreshData;
 </script>
 </body>
 </html>
