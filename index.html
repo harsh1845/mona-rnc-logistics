@@ -59,10 +59,24 @@
 
 <div id="login-overlay">
     <div class="login-box">
-        <h2>System Login</h2>
-        <input type="text" id="username" placeholder="Username (admin/staff)">
+        <h2 id="auth-title">System Login</h2>
+        <input type="email" id="email" placeholder="Email (staff@firm.com)">
         <input type="password" id="password" placeholder="Password">
-        <button onclick="attemptLogin()">Login</button>
+        
+        <div id="login-actions">
+            <button onclick="handleAuth()">Login</button>
+            <p style="font-size:0.8rem; margin-top:10px;">
+                Staff member? <a href="#" onclick="toggleAuthMode(true)">Register here</a>
+            </p>
+        </div>
+
+        <div id="register-actions" style="display:none;">
+            <button onclick="handleAuth()" style="background:#10b981;">Register Staff Account</button>
+            <p style="font-size:0.8rem; margin-top:10px;">
+                Back to <a href="#" onclick="toggleAuthMode(false)">Login</a>
+            </p>
+        </div>
+        
         <p id="login-error" style="color:red; font-size:0.8rem; margin-top:10px;"></p>
     </div>
 </div>
@@ -147,7 +161,8 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, updateDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { initializeFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, updateDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     // --- CONFIG ---
     const firebaseConfig = {
@@ -159,11 +174,18 @@
         appId: "1:989428986519:web:cdcea9bd1b6aecdb9d2fd2",
         measurementId: "G-LSP2HCVPKC"
     };
-    
+
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    // Use initializeFirestore with long-polling to prevent ERR_BLOCKED_BY_CLIENT
+    const db = initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+        useFetchStreams: false
+    });
 
     // --- STATE ---
+    let isRegistering = false;
     let currentMode = "PURCHASE";
     let manageType = "CUSTOMER"; 
     let allLogs = [];
@@ -178,16 +200,50 @@
         deliveryTypes: ["Intra-city", "Inter-city"]
     };
 
-    // --- QUOTA & ERROR HANDLING ---
-    const handleFirebaseError = (error) => {
-        console.error("Firebase Error:", error);
-        if (error.code === 'resource-exhausted') {
-            alert("⚠️ DAILY QUOTA EXCEEDED\n\nYou have used your 50,000 daily reads. The database will not save or delete until tomorrow. Do NOT clear cache.");
-        } else {
-            alert("Error: " + error.message);
+    // ---- AUTH LOGIC -----
+    window.toggleAuthMode = (register) => {
+        isRegistering = register;
+        document.getElementById('auth-title').innerText = register ? "Staff Registration" : "System Login";
+        document.getElementById('login-actions').style.display = register ? 'none' : 'block';
+        document.getElementById('register-actions').style.display = register ? 'block' : 'none';
+    };
+
+    window.handleAuth = async () => {
+        const email = document.getElementById('email').value;
+        const pass = document.getElementById('password').value;
+        const errorEl = document.getElementById('login-error');
+        errorEl.innerText = "Processing...";
+
+        try {
+            if (isRegistering) {
+                await createUserWithEmailAndPassword(auth, email, pass);
+                alert("Staff Registered Successfully!");
+            } else {
+                await signInWithEmailAndPassword(auth, email, pass);
+            }
+        } catch (error) {
+            errorEl.innerText = error.message.replace("Firebase: ", "");
         }
     };
 
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            isAdmin = (user.email === "mayur8479@gmail.com");
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            document.getElementById('actions-header').style.display = 'table-cell';
+            if(!isAdmin) document.getElementById('tab-emp').style.display = 'none';
+            
+            await loadAllData();
+            renderForm();
+            fetchData();
+        } else {
+            document.getElementById('login-overlay').style.display = 'flex';
+            document.getElementById('app-container').style.display = 'none';
+        }
+    });
+
+    window.logout = () => signOut(auth);
     // --- DATABASE ACTIONS (Optimized) ---
 
     // 1. DELETE
@@ -231,7 +287,7 @@
         if (manageType === 'CUSTOMER') {
             data.location = locInput.value.trim().toUpperCase();
         } else if (manageType === 'SELLER') {
-            data.location = "SUNDRY CREDITORS";
+            data.location = "Sundry Creditors";
         } else if (manageType === 'EMPLOYEE') {
             collName = "employees";
         }
@@ -309,25 +365,6 @@
             } catch(e) { handleFirebaseError(e); }
         }
     }
-
-    // --- AUTH ---
-    window.attemptLogin = async () => {
-        const u = document.getElementById('username').value;
-        const p = document.getElementById('password').value;
-        if ((u === "admin" && p === "admin") || (u === "staff" && p === "123")) {
-            isAdmin = (u === "admin");
-            document.getElementById('login-overlay').style.display = 'none';
-            document.getElementById('app-container').style.display = 'block';
-            document.getElementById('actions-header').style.display = 'table-cell';
-            if(!isAdmin) document.getElementById('tab-emp').style.display = 'none';
-            await loadAllData();
-            renderForm();
-            fetchData();
-        } else {
-            document.getElementById('login-error').innerText = "Invalid Creds";
-        }
-    };
-    window.logout = () => location.reload();
 
     // --- UI RENDERING ---
     window.renderManageList = (overrideSearch) => {
@@ -662,9 +699,21 @@
         document.querySelectorAll('.group-inter').forEach(el => el.classList.toggle('hidden-field', type !== 'Inter-city'));
     };
     window.deleteItem = deleteItem;
-    window.deleteItemLog = deleteItemLog;
-    window.attemptLogin = attemptLogin;
+    window.handleAuth = handleAuth;
+    window.toggleAuthMode = toggleAuthMode;
     window.forceRefreshData = forceRefreshData;
+    window.setMode = setMode;
+    window.setManageType = setManageType;
+    window.startEdit = startEdit;
+    window.cancelEdit = cancelEdit;
+    window.submitData = submitData;
+    window.renderManageList = renderManageList;
+    window.renderTable = renderTable;
+
+    const handleFirebaseError = (error) => {
+        console.error("Firebase Error:", error);
+        alert("Error: " + error.message);
+    };
 </script>
 </body>
 </html>
