@@ -9,7 +9,7 @@
         :root { --primary: #2563eb; --bg: #f3f4f6; --white: #ffffff; --danger: #ef4444; --warning: #f59e0b; --text: #1f2937; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); }
         
-        .container { max-width: 1200px; margin: 0 auto; display: none; } /* Increased width for bill table */
+        .container { max-width: 1200px; margin: 0 auto; display: none; }
         
         #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f3f4f6; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: center; }
@@ -34,7 +34,7 @@
         input, select, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; width: 100%; box-sizing: border-box; }
         button.submit-btn { background: #10b981; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; margin-top: 20px; width: 100%; }
         
-        /* NEW STYLES FOR BILLING TABLE */
+        /* BILLING TABLE */
         .bill-table-container { margin-top: 20px; overflow-x: auto; border: 1px solid #eee; border-radius: 4px; }
         .bill-table { width: 100%; min-width: 800px; border-collapse: collapse; font-size: 0.85rem; }
         .bill-table th { background: #f3f4f6; padding: 8px; text-align: left; border-bottom: 2px solid #ddd; }
@@ -50,7 +50,7 @@
         .manage-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
         .manage-item:hover { background: #f9fafb; }
 
-        /* Modal (Popup) Styles */
+        /* Modal Styles */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; }
         .modal-content { background: white; width: 90%; max-width: 900px; padding: 25px; border-radius: 8px; max-height: 90vh; overflow-y: auto; position: relative; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
@@ -71,6 +71,12 @@
         .btn-edit { background: var(--warning); color: black; }
         .btn-delete { background: var(--danger); }
 
+        /* Filter Tab Styles */
+        .filter-section { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px; border: 1px solid #eee; }
+        .filter-row { display: flex; gap: 15px; margin-bottom: 10px; flex-wrap: wrap; }
+        .filter-item { flex: 1; min-width: 150px; }
+        .filter-btn-row { text-align: right; margin-top: 10px; }
+
         @media (max-width: 600px) { 
             .table-controls { flex-direction: column; gap: 10px; } 
             .manage-grid { grid-template-columns: 1fr; }
@@ -85,34 +91,20 @@
             <h2 style="margin:0;">Cash Sale Details</h2>
             <button class="close-modal" onclick="closeBillModal()">&times;</button>
         </div>
-        
         <div class="bill-details-grid">
             <div><strong>Date:</strong> <span id="view-date">-</span></div>
             <div><strong>Customer:</strong> <span id="view-party">-</span></div>
             <div><strong>Payment:</strong> <span id="view-type">-</span> <span id="view-status"></span></div>
         </div>
-
         <table class="full-bill-table">
             <thead>
                 <tr>
-                    <th>Barcode</th>
-                    <th>Article No</th>
-                    <th>Name</th>
-                    <th>Size</th>
-                    <th>Color</th>
-                    <th>MRP</th>
-                    <th>Pcs</th>
-                    <th>WSP</th>
-                    <th>Total</th>
+                    <th>Barcode</th><th>Art No</th><th>Name</th><th>Size</th><th>Color</th><th>MRP</th><th>Pcs</th><th>WSP</th><th>Total</th>
                 </tr>
             </thead>
-            <tbody id="view-bill-body">
-                </tbody>
+            <tbody id="view-bill-body"></tbody>
         </table>
-
-        <div class="bill-footer">
-            Grand Total: ₹<span id="view-grand-total">0.00</span>
-        </div>
+        <div class="bill-footer">Grand Total: ₹<span id="view-grand-total">0.00</span></div>
     </div>
 </div>
 
@@ -121,21 +113,14 @@
         <h2 id="auth-title">System Login</h2>
         <input type="email" id="email" placeholder="Email (staff@firm.com)">
         <input type="password" id="password" placeholder="Password">
-        
         <div id="login-actions">
             <button onclick="handleAuth()">Login</button>
-            <p style="font-size:0.8rem; margin-top:10px;">
-                Staff member? <a href="#" onclick="toggleAuthMode(true)">Register here</a>
-            </p>
+            <p style="font-size:0.8rem; margin-top:10px;">Staff member? <a href="#" onclick="toggleAuthMode(true)">Register here</a></p>
         </div>
-
         <div id="register-actions" style="display:none;">
             <button onclick="handleAuth()" style="background:#10b981;">Register Staff Account</button>
-            <p style="font-size:0.8rem; margin-top:10px;">
-                Back to <a href="#" onclick="toggleAuthMode(false)">Login</a>
-            </p>
+            <p style="font-size:0.8rem; margin-top:10px;">Back to <a href="#" onclick="toggleAuthMode(false)">Login</a></p>
         </div>
-        
         <p id="login-error" style="color:red; font-size:0.8rem; margin-top:10px;"></p>
     </div>
 </div>
@@ -152,9 +137,11 @@
     <div class="tabs">
         <button class="tab active" onclick="setMode('PURCHASE')">PURCHASE</button>
         <button class="tab" onclick="setMode('SALES')">SALES</button>
-        <button class="tab" onclick="setMode('CASH_SALE')">CASH SALE</button> <button class="tab" onclick="setMode('PURCHASE_RET')">PURCHASE RETURN</button>
+        <button class="tab" onclick="setMode('CASH_SALE')">CASH SALE</button>
+        <button class="tab" onclick="setMode('PURCHASE_RET')">PURCHASE RETURN</button>
         <button class="tab" onclick="setMode('SALES_RET')">SALES RETURN</button>
         <button class="tab" style="background:#374151; color:white;" onclick="setMode('MANAGE')">MANAGE DATA</button>
+        <button class="tab" style="background:#2563eb; color:white;" onclick="setMode('FILTER')">🔍 FILTER & SORT</button>
     </div>
 
     <div class="card" id="log-entry-card">
@@ -169,20 +156,10 @@
                     <table class="bill-table" id="billTable">
                         <thead>
                             <tr>
-                                <th style="width:15%">Barcode</th>
-                                <th style="width:15%">Name</th>
-                                <th style="width:10%">Art No</th>
-                                <th style="width:10%">Size</th>
-                                <th style="width:10%">Color</th>
-                                <th style="width:10%">MRP</th>
-                                <th style="width:8%">Pcs</th>
-                                <th style="width:12%">Rate (WSP)</th>
-                                <th style="width:12%">Total</th> 
-                                <th style="width:5%"></th>
+                                <th style="width:15%">Barcode</th><th style="width:15%">Name</th><th style="width:10%">Art No</th><th style="width:10%">Size</th><th style="width:10%">Color</th><th style="width:10%">MRP</th><th style="width:8%">Pcs</th><th style="width:12%">Rate (WSP)</th><th style="width:12%">Total</th><th style="width:5%"></th>
                             </tr>
                         </thead>
-                        <tbody id="billTableBody">
-                            </tbody>
+                        <tbody id="billTableBody"></tbody>
                     </table>
                 </div>
                 <div class="bill-actions">
@@ -191,20 +168,17 @@
                 </div>
                 <input type="hidden" name="total_bill_amount" id="total_bill_amount" value="0">
             </div>
-
             <button type="submit" class="submit-btn" id="save-btn">Save Entry</button>
         </form>
     </div>
 
     <div class="card" id="manage-ui-card" style="display:none;">
         <h3>Manage Database</h3>
-        
         <div class="sub-tabs">
             <button class="sub-tab active" onclick="setManageType('CUSTOMER')">Customers</button>
             <button class="sub-tab" onclick="setManageType('SELLER')">Sellers</button>
             <button class="sub-tab" id="tab-emp" onclick="setManageType('EMPLOYEE')">Employees</button>
         </div>
-
         <div class="manage-grid">
             <div style="background:#f9fafb; padding:15px; border-radius:8px;">
                 <h4 style="margin-top:0;">Add New <span id="manage-type-label">Customer</span></h4>
@@ -214,7 +188,6 @@
                     <button type="submit" class="submit-btn" style="margin-top:10px;">Add to Database</button>
                 </form>
             </div>
-
             <div>
                 <input type="text" id="manage-search" placeholder="Search..." onkeyup="renderManageList()">
                 <div class="manage-list" id="manage-list-container"></div>
@@ -222,22 +195,74 @@
         </div>
     </div>
 
+    <div class="card" id="filter-ui-card" style="display:none;">
+        <h3>Advanced Filter & Sort</h3>
+        <div class="filter-section">
+            <div class="filter-row">
+                <div class="filter-item">
+                    <label>From Date:</label>
+                    <input type="date" id="filter-start-date">
+                </div>
+                <div class="filter-item">
+                    <label>To Date:</label>
+                    <input type="date" id="filter-end-date">
+                </div>
+                <div class="filter-item">
+                    <label>Sort By Date:</label>
+                    <select id="filter-sort-order">
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-row">
+                <div class="filter-item">
+                    <label>Log Type:</label>
+                    <select id="filter-type">
+                        <option value="ALL">All Types</option>
+                        <option value="PURCHASE">Purchase</option>
+                        <option value="SALES">Sales</option>
+                        <option value="CASH_SALE">Cash Sale</option>
+                        <option value="PURCHASE_RET">Purchase Return</option>
+                        <option value="SALES_RET">Sales Return</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>Party / Customer:</label>
+                    <input type="text" id="filter-party" placeholder="Name or Brand...">
+                </div>
+                <div class="filter-item">
+                    <label>Bill No / Barcode:</label>
+                    <input type="text" id="filter-bill" placeholder="Bill #...">
+                </div>
+            </div>
+             <div class="filter-row">
+                 <div class="filter-item">
+                     <label>Search All Fields:</label>
+                     <input type="text" id="filter-generic" placeholder="Any text (e.g. Size, Color, Remark)...">
+                 </div>
+            </div>
+            
+            <div class="filter-btn-row">
+                <button onclick="resetFilters()" style="background:#ef4444; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">Reset</button>
+                <button onclick="applyFilters()" style="background:#2563eb; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; margin-left:10px;">Apply Filters</button>
+            </div>
+        </div>
+        <div style="font-size:0.9rem; color:#666; margin-bottom:10px;">
+            Showing <strong id="filter-count">0</strong> results
+        </div>
+    </div>
+
     <div class="card" id="table-card">
         <div class="table-controls">
-            <h3>Recent Logs</h3>
-            <input type="text" id="searchInput" placeholder="Search Bill No, Firm, Name..." onkeyup="renderTable()">
+            <h3>Logs</h3>
+            <input type="text" id="searchInput" placeholder="Quick Search..." onkeyup="renderTable()">
         </div>
         <div style="overflow-x:auto;">
             <table class="main-table" id="dataTable">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Firm</th>
-                        <th>Party/Brand</th>
-                        <th>Details</th> <th>Pcs</th>
-                        <th>Amt</th>
-                        <th id="actions-header" style="display:none;">Actions</th>
+                        <th>Date</th><th>Type</th><th>Firm</th><th>Party/Brand</th><th>Details</th><th>Pcs</th><th>Amt</th><th id="actions-header" style="display:none;">Actions</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -264,16 +289,14 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = initializeFirestore(app, {
-        experimentalForceLongPolling: true,
-        useFetchStreams: false
-    });
+    const db = initializeFirestore(app, { experimentalForceLongPolling: true, useFetchStreams: false });
 
     // --- STATE ---
     let isRegistering = false;
     let currentMode = "PURCHASE";
     let manageType = "CUSTOMER"; 
-    let allLogs = [];
+    let allLogs = [];     // Stores currently loaded logs (50 by default)
+    let filteredLogs = []; // Stores logs after filtering
     let isAdmin = false;
     let editingId = null;
     let CUSTOMER_DB = [];
@@ -390,10 +413,9 @@
             { label: "Checked By", type: "text", key: "checked_by", list: "employees" },
             { label: "Remark", type: "text", key: "remark" }
         ],
-        // --- NEW CASH SALE CONFIG (Header only) ---
         CASH_SALE: [
             { label: "Date", type: "date", key: "date_main" },
-            { label: "Customer Name", type: "text", key: "customer_cash_sale" },
+            { label: "Customer Name", type: "text", key: "party", list: "customers" },
             { label: "Payment Type", type: "select", options: ["CASH", "CREDIT", "UPI"], key: "payment_type" },
             { label: "Credit Paid?", type: "checkbox", key: "is_paid", group: "credit-only" }
         ],
@@ -422,107 +444,72 @@
     };
 
     // --- FORM RENDERING ---
-    // --- FORM RENDERING ---
     window.renderForm = (dataToFill = null) => {
         const container = document.getElementById('dynamic-fields');
         container.innerHTML = '';
         const isStaffEdit = (editingId !== null && !isAdmin);
         const staffAllowedFields = ['lr_no', 'transport_mode', 'remark', 'L/R_no', 'transport', 'signed_copy', 'delivery_type', 'is_paid', 'payment_type'];
-        
-        // Define fields that should NOT be required
-        const optionalFields = [
-            'remark', 
-            'is_paid', 
-            'lr_no',           // Optional because it hides
-            'transport_mode',  // Optional because it hides
-            'signed_copy',     // Optional because it hides
-            'L/R_no', 
-            'against_bill', 
-            'credit_note_no'
-        ];
+        const optionalFields = ['remark', 'is_paid', 'lr_no', 'transport_mode', 'signed_copy', 'L/R_no', 'against_bill', 'credit_note_no'];
 
-        // 1. Setup Datalists
+        // Datalists
         const dlContainer = document.createElement('div');
         dlContainer.style.display = 'none';
-        
         const locDL = document.createElement('datalist'); locDL.id = "dl-locations";
         [...new Set(CUSTOMER_DB.map(c => c.location))].sort().forEach(l => { const o = document.createElement('option'); o.value = l; locDL.appendChild(o); });
-        
         const custDL = document.createElement('datalist'); custDL.id = "dl-customers";
         CUSTOMER_DB.filter(c => c.location !== "Sundry Creditors").forEach(c => { const o = document.createElement('option'); o.value = c.name; custDL.appendChild(o); });
-        
         const sellerDL = document.createElement('datalist'); sellerDL.id = "dl-purchase_sellers";
         const sundry = CUSTOMER_DB.filter(c => c.location === "Sundry Creditors").map(c => c.name);
         [...new Set(["Milton", "Apna Bazaar", "Karachu", ...sundry])].sort().forEach(n => { const o = document.createElement('option'); o.value = n; sellerDL.appendChild(o); });
-
         const empDL = document.createElement('datalist'); empDL.id = "dl-employees";
         EMPLOYEE_DB.forEach(e => { const o = document.createElement('option'); o.value = e.name; empDL.appendChild(o); });
-
         dlContainer.append(locDL, custDL, sellerDL, empDL);
         container.appendChild(dlContainer);
 
-        // 2. Render Header Fields
-        FORMS[currentMode].forEach(field => {
-            const group = document.createElement('div');
-            group.className = 'form-group';
-            if (field.group) group.classList.add(`group-${field.group}`);
-            
-            const label = document.createElement('label');
-            label.innerText = field.label;
-            group.appendChild(label);
-            
-            let input;
-            if (field.type === 'select') {
-                input = document.createElement('select');
-                field.options.forEach(opt => { const option = document.createElement('option'); option.value = opt; option.innerText = opt; input.appendChild(option); });
-            } else {
-                input = document.createElement('input');
-                input.type = field.type;
-                if(field.type === 'number') input.step = "0.01";
-                if(field.list) input.setAttribute('list', `dl-${field.list}`);
-                if(field.type === 'checkbox') input.style.width = '20px';
-            }
-            
-            input.name = field.key;
-            if(dataToFill && dataToFill[field.key]) {
-                if(field.type === 'checkbox') input.checked = dataToFill[field.key];
-                else input.value = dataToFill[field.key];
-            }
-            if(field.type === 'date' && !dataToFill) input.valueAsDate = new Date();
-            
-            // Event Listeners
-            if (field.key === 'payment_type' || field.key === 'delivery_type') input.onchange = updateVisibility;
-            
-            // Disable fields for staff if editing
-            if (isStaffEdit && !staffAllowedFields.includes(field.key)) { input.disabled = true; input.style.backgroundColor = "#e5e7eb"; }
-            
-            // CORRECTED REQUIRED LOGIC:
-            // Only require if it is NOT a checkbox AND NOT in the optional list
-            if(field.type !== 'checkbox' && !optionalFields.includes(field.key)) {
-                input.required = true;
-            }
+        if(currentMode !== 'FILTER') {
+            FORMS[currentMode].forEach(field => {
+                const group = document.createElement('div');
+                group.className = 'form-group';
+                if (field.group) group.classList.add(`group-${field.group}`);
+                const label = document.createElement('label');
+                label.innerText = field.label;
+                group.appendChild(label);
+                let input;
+                if (field.type === 'select') {
+                    input = document.createElement('select');
+                    field.options.forEach(opt => { const option = document.createElement('option'); option.value = opt; option.innerText = opt; input.appendChild(option); });
+                } else {
+                    input = document.createElement('input');
+                    input.type = field.type;
+                    if(field.type === 'number') input.step = "0.01";
+                    if(field.list) input.setAttribute('list', `dl-${field.list}`);
+                    if(field.type === 'checkbox') input.style.width = '20px';
+                }
+                input.name = field.key;
+                if(dataToFill && dataToFill[field.key]) {
+                    if(field.type === 'checkbox') input.checked = dataToFill[field.key];
+                    else input.value = dataToFill[field.key];
+                }
+                if(field.type === 'date' && !dataToFill) input.valueAsDate = new Date();
+                if (field.key === 'payment_type' || field.key === 'delivery_type') input.onchange = updateVisibility;
+                if (isStaffEdit && !staffAllowedFields.includes(field.key)) { input.disabled = true; input.style.backgroundColor = "#e5e7eb"; }
+                if(field.type !== 'checkbox' && !optionalFields.includes(field.key)) { input.required = true; }
+                group.appendChild(input);
+                container.appendChild(group);
+            });
+        }
 
-            group.appendChild(input);
-            container.appendChild(group);
-        });
-
-        // 3. Handle Cash Sale Table
         const billSection = document.getElementById('billing-section');
         const billBody = document.getElementById('billTableBody');
-        billBody.innerHTML = ''; // Clear prev rows
-
+        billBody.innerHTML = ''; 
         if (currentMode === 'CASH_SALE') {
             billSection.style.display = 'block';
-            if(dataToFill && dataToFill.items) {
-                dataToFill.items.forEach(item => addBillRow(item));
-            } else {
-                addBillRow(); 
-            }
+            if(dataToFill && dataToFill.items) { dataToFill.items.forEach(item => addBillRow(item)); } 
+            else { addBillRow(); }
             calcBillTotal();
         } else {
             billSection.style.display = 'none';
         }
-
         updateVisibility();
     };
 
@@ -530,85 +517,42 @@
     window.addBillRow = (data = null) => {
         const tbody = document.getElementById('billTableBody');
         const tr = document.createElement('tr');
-        
-        // Define cells: [Key, Placeholder, Type, Value, Class, ReadOnly]
         const cells = [
-            { k: 'barcode', p: 'Scan...' },
-            { k: 'name', p: 'Item Name' },
-            { k: 'art_no', p: 'Art#' },
-            { k: 'size', p: 'Size' },
-            { k: 'color', p: 'Color' },
-            { k: 'mrp', p: 'MRP', t: 'number' },
-            { k: 'pcs', p: '1', t: 'number', v: 1, cls: 'calc-trigger' },
-            { k: 'wsp', p: 'Price', t: 'number', cls: 'calc-trigger' },
-            // NEW: Row Total Cell (Readonly)
+            { k: 'barcode', p: 'Scan...' }, { k: 'name', p: 'Item Name' }, { k: 'art_no', p: 'Art#' }, { k: 'size', p: 'Size' }, { k: 'color', p: 'Color' },
+            { k: 'mrp', p: 'MRP', t: 'number' }, { k: 'pcs', p: '1', t: 'number', v: 1, cls: 'calc-trigger' }, { k: 'wsp', p: 'Price', t: 'number', cls: 'calc-trigger' },
             { k: 'row_total', p: '0.00', t: 'number', ro: true } 
         ];
-
         cells.forEach(c => {
             const td = document.createElement('td');
             const inp = document.createElement('input');
-            inp.type = c.t || 'text';
-            inp.placeholder = c.p;
-            inp.name = `item_${c.k}[]`; 
-            
+            inp.type = c.t || 'text'; inp.placeholder = c.p; inp.name = `item_${c.k}[]`; 
             if(c.t === 'number') inp.step = '0.01';
-            if(c.ro) {
-                inp.readOnly = true;
-                inp.style.backgroundColor = '#f9fafb'; // Light grey for readonly
-                inp.style.border = 'none';
-                inp.style.fontWeight = 'bold';
-            }
-
-            // Fill data if editing or default value
-            if(data && data[c.k]) inp.value = data[c.k];
-            else if(c.v) inp.value = c.v;
-
+            if(c.ro) { inp.readOnly = true; inp.style.backgroundColor = '#f9fafb'; inp.style.border = 'none'; inp.style.fontWeight = 'bold'; }
+            if(data && data[c.k]) inp.value = data[c.k]; else if(c.v) inp.value = c.v;
             if(c.cls === 'calc-trigger') inp.oninput = calcBillTotal;
-            td.appendChild(inp);
-            tr.appendChild(td);
+            td.appendChild(inp); tr.appendChild(td);
         });
-
-        // Delete Button
         const delTd = document.createElement('td');
         delTd.innerHTML = `<button type="button" class="remove-row-btn" onclick="removeBillRow(this)">×</button>`;
         tr.appendChild(delTd);
-        
         tbody.appendChild(tr);
     };
 
     window.removeBillRow = (btn) => {
         const row = btn.closest('tr');
-        if(document.querySelectorAll('#billTableBody tr').length > 1) {
-            row.remove();
-            calcBillTotal();
-        }
+        if(document.querySelectorAll('#billTableBody tr').length > 1) { row.remove(); calcBillTotal(); }
     };
 
     window.calcBillTotal = () => {
         let grandTotal = 0;
-        
         document.querySelectorAll('#billTableBody tr').forEach(tr => {
-            // 1. Get inputs for this specific row
-            const pcsInput = tr.querySelector('input[name="item_pcs[]"]');
-            const rateInput = tr.querySelector('input[name="item_wsp[]"]');
+            const pcs = parseFloat(tr.querySelector('input[name="item_pcs[]"]').value) || 0;
+            const rate = parseFloat(tr.querySelector('input[name="item_wsp[]"]').value) || 0;
             const totalInput = tr.querySelector('input[name="item_row_total[]"]');
-
-            // 2. Parse values (default to 0 if empty)
-            const pcs = parseFloat(pcsInput.value) || 0;
-            const rate = parseFloat(rateInput.value) || 0;
-
-            // 3. Calculate Row Total
             const rowTotal = pcs * rate;
-
-            // 4. Update the Row Total Input
             if(totalInput) totalInput.value = rowTotal.toFixed(2);
-
-            // 5. Add to Grand Total
             grandTotal += rowTotal;
         });
-
-        // Update Bottom Total Display
         document.getElementById('billTotalDisplay').innerText = grandTotal.toFixed(2);
         document.getElementById('total_bill_amount').value = grandTotal;
     };
@@ -635,24 +579,15 @@
     window.submitData = async (e) => {
         e.preventDefault();
         const btn = document.getElementById('save-btn');
-        btn.disabled = true;
-        btn.innerText = "Saving...";
-
+        btn.disabled = true; btn.innerText = "Saving...";
         const formData = new FormData(e.target);
         const data = { type: currentMode, timestamp: new Date() };
-
-        // 1. Process Standard Fields
-        formData.forEach((value, key) => {
-            if(!key.startsWith('item_')) data[key] = value;
-        });
+        formData.forEach((value, key) => { if(!key.startsWith('item_')) data[key] = value; });
         
-        // 2. Process Cash Sale Items
         if(currentMode === 'CASH_SALE') {
             const items = [];
-            const rows = document.querySelectorAll('#billTableBody tr');
             let totalPcs = 0;
-            
-            rows.forEach(tr => {
+            document.querySelectorAll('#billTableBody tr').forEach(tr => {
                 const item = {
                     barcode: tr.querySelector('input[name="item_barcode[]"]').value,
                     name: tr.querySelector('input[name="item_name[]"]').value,
@@ -663,41 +598,31 @@
                     pcs: parseFloat(tr.querySelector('input[name="item_pcs[]"]').value) || 0,
                     wsp: parseFloat(tr.querySelector('input[name="item_wsp[]"]').value) || 0
                 };
-                if(item.barcode || item.name) { // Only save if has content
-                    items.push(item);
-                    totalPcs += item.pcs;
-                }
+                if(item.barcode || item.name) { items.push(item); totalPcs += item.pcs; }
             });
-
-            data.items = items;
-            data.pcs = totalPcs; // For main table summary
-            data.amount = document.getElementById('total_bill_amount').value; // For main table summary
+            data.items = items; data.pcs = totalPcs; 
+            data.amount = document.getElementById('total_bill_amount').value;
             data.is_paid = document.querySelector('input[name="is_paid"]')?.checked || false;
         }
 
         try {
-            if (editingId) {
-                await updateDoc(doc(db, "logs", editingId), data);
-                alert("Updated!");
-                cancelEdit();
-            } else {
-                await addDoc(collection(db, "logs"), data);
-                alert("Saved!");
-                e.target.reset();
-                renderForm(); 
-            }
+            if (editingId) { await updateDoc(doc(db, "logs", editingId), data); alert("Updated!"); cancelEdit(); } 
+            else { await addDoc(collection(db, "logs"), data); alert("Saved!"); e.target.reset(); renderForm(); }
             fetchData(); 
         } catch (error) { console.error(error); alert(error.message); }
-        btn.disabled = false;
-        btn.innerText = "Save Entry";
+        btn.disabled = false; btn.innerText = "Save Entry";
     };
 
+    // --- TABLE RENDER & FILTERING ---
     window.renderTable = () => {
         const tbody = document.querySelector('#dataTable tbody');
         const search = document.getElementById('searchInput').value.toLowerCase();
         tbody.innerHTML = '';
         
-        const filtered = allLogs.filter(log => {
+        // Use filteredLogs if in FILTER mode, otherwise use allLogs
+        const sourceLogs = (currentMode === 'FILTER') ? filteredLogs : allLogs;
+
+        const filtered = sourceLogs.filter(log => {
             let itemStr = "";
             if(log.items) itemStr = log.items.map(i => `${i.name} ${i.barcode}`).join(" ");
             const fullStr = Object.values(log).join(' ') + " " + itemStr;
@@ -708,8 +633,6 @@
             const tr = document.createElement('tr');
             const date = log.date_bill || log.date_lr || log.date_main || "N/A";
             const party = log.party || log.brand || "-";
-            
-            // Custom "Details" Column Logic
             let details = log.bill_no || log.against_bill || '-';
             if(log.type === 'CASH_SALE') {
                 const itemCount = log.items ? log.items.length : 0;
@@ -717,55 +640,129 @@
                 details = `${itemCount} Items [${log.payment_type || '-'}] ${payStatus}`;
             }
 
-            tr.innerHTML = `
-                <td>${date}</td>
-                <td><span style="font-size:0.8em; padding:2px 5px; background:#e5e7eb;">${log.type}</span></td>
-                <td>${log.firm || '-'}</td>
-                <td>${party}</td>
-                <td>${details}</td>
-                <td>${log.pcs || '-'}</td>
-                <td>${log.amount || '-'}</td>
-            `;
-
+            tr.innerHTML = `<td>${date}</td><td><span style="font-size:0.8em; padding:2px 5px; background:#e5e7eb;">${log.type}</span></td><td>${log.firm || '-'}</td><td>${party}</td><td>${details}</td><td>${log.pcs || '-'}</td><td>${log.amount || '-'}</td>`;
+            
             const actionTd = document.createElement('td');
-            
-            // NEW: View Button for Cash Sales
-            if(log.type === 'CASH_SALE') {
-                actionTd.innerHTML += `<button class="action-btn" style="background:#3b82f6;" onclick="viewBill('${log.id}')">📄 View</button> `;
-            }
-
+            if(log.type === 'CASH_SALE') actionTd.innerHTML += `<button class="action-btn" style="background:#3b82f6;" onclick="viewBill('${log.id}')">📄 View</button> `;
             actionTd.innerHTML += `<button class="action-btn btn-edit" onclick="startEdit('${log.id}')">Edit</button>`;
-            
-            if (isAdmin) {
-                actionTd.innerHTML += `<button class="action-btn btn-delete" onclick="deleteItemLog('${log.id}', this)" style="margin-left:5px;">Del</button>`;
-            }
-            tr.appendChild(actionTd);
-            tbody.appendChild(tr);
+            if (isAdmin) actionTd.innerHTML += `<button class="action-btn btn-delete" onclick="deleteItemLog('${log.id}', this)" style="margin-left:5px;">Del</button>`;
+            tr.appendChild(actionTd); tbody.appendChild(tr);
         });
     };
+
+    // --- FILTER LOGIC ---
+    window.applyFilters = async () => {
+        const startDate = document.getElementById('filter-start-date').value;
+        const endDate = document.getElementById('filter-end-date').value;
+        const type = document.getElementById('filter-type').value;
+        const party = document.getElementById('filter-party').value.toLowerCase();
+        const bill = document.getElementById('filter-bill').value.toLowerCase();
+        const generic = document.getElementById('filter-generic').value.toLowerCase();
+        const sortOrder = document.getElementById('filter-sort-order').value; // 'asc' or 'desc'
+
+        // 1. Build Query for Date Range & Sort (Firestore Optimization)
+        let q = collection(db, "logs");
+        
+        // Note: Firestore requires indexes for complex queries. For now, we fetch by date and filter rest in memory.
+        let queryConstraints = [orderBy("timestamp", sortOrder)];
+        
+        if (startDate) {
+            // Need to create Date objects for comparison
+            queryConstraints.push(orderBy("timestamp", sortOrder)); // Ensure ordered
+            // Client-side filtering is often safer for complex mixing without creating 50 indexes
+        }
+
+        // Fetching more logs for filtering (Limit increased)
+        const finalQuery = query(collection(db, "logs"), orderBy("timestamp", sortOrder), limit(200)); 
+        const snap = await getDocs(finalQuery);
+        let tempLogs = [];
+        snap.forEach(doc => tempLogs.push({ id: doc.id, ...doc.data() }));
+
+        // 2. Client-Side Filtering
+        filteredLogs = tempLogs.filter(log => {
+            // Date Filter
+            if (startDate || endDate) {
+                // Determine the "main" date of the log
+                const dateStr = log.date_bill || log.date_lr || log.date_main;
+                if (!dateStr) return false;
+                const logDate = new Date(dateStr);
+                if (startDate && logDate < new Date(startDate)) return false;
+                if (endDate && logDate > new Date(endDate)) return false;
+            }
+
+            // Type Filter
+            if (type !== 'ALL' && log.type !== type) return false;
+
+            // Party Filter
+            if (party) {
+                const p = (log.party || log.brand || '').toLowerCase();
+                if (!p.includes(party)) return false;
+            }
+
+            // Bill Filter
+            if (bill) {
+                const b = (log.bill_no || log.against_bill || log.barcode || '').toLowerCase();
+                if (!b.includes(bill)) return false;
+            }
+
+            // Generic Field Filter (Deep Search)
+            if (generic) {
+                const fullStr = JSON.stringify(log).toLowerCase();
+                if (!fullStr.includes(generic)) return false;
+            }
+
+            return true;
+        });
+
+        document.getElementById('filter-count').innerText = filteredLogs.length;
+        renderTable();
+    };
+
+    window.resetFilters = () => {
+        document.getElementById('filter-start-date').value = '';
+        document.getElementById('filter-end-date').value = '';
+        document.getElementById('filter-type').value = 'ALL';
+        document.getElementById('filter-party').value = '';
+        document.getElementById('filter-bill').value = '';
+        document.getElementById('filter-generic').value = '';
+        filteredLogs = allLogs; // Reset to default loaded logs
+        document.getElementById('filter-count').innerText = filteredLogs.length;
+        renderTable();
+    };
+
 
     // --- GENERIC FUNCTIONS ---
     window.setMode = (mode) => {
         currentMode = mode;
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         event.target.classList.add('active');
+
+        // Hide all cards first
+        document.getElementById('log-entry-card').style.display = 'none';
+        document.getElementById('manage-ui-card').style.display = 'none';
+        document.getElementById('filter-ui-card').style.display = 'none';
+        
         if (mode === 'MANAGE') {
-            document.getElementById('log-entry-card').style.display = 'none';
-            document.getElementById('table-card').style.display = 'none';
             document.getElementById('manage-ui-card').style.display = 'block';
+            document.getElementById('table-card').style.display = 'none'; // Hide table in manage
             setManageType('CUSTOMER'); 
+        } else if (mode === 'FILTER') {
+            document.getElementById('filter-ui-card').style.display = 'block';
+            document.getElementById('table-card').style.display = 'block';
+            applyFilters(); // Trigger initial load
         } else {
             if(editingId) cancelEdit();
             document.getElementById('log-entry-card').style.display = 'block';
             document.getElementById('table-card').style.display = 'block';
-            document.getElementById('manage-ui-card').style.display = 'none';
             document.getElementById('form-title').innerText = `New ${mode.replace('_', ' ')} Entry`;
             renderForm();
+            // Reload default logs for data entry views
+            fetchData();
         }
     };
 
     window.startEdit = (id) => {
-        const log = allLogs.find(l => l.id === id);
+        const log = allLogs.find(l => l.id === id) || filteredLogs.find(l => l.id === id);
         if (!log) return;
         setMode(log.type);
         editingId = id; 
@@ -803,18 +800,16 @@
     window.setManageType = (type) => {
         manageType = type;
         document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-        // ... (standard logic to highlight tab)
         document.getElementById('manage-type-label').innerText = type;
         renderManageList();
     };
-    window.renderManageList = (s) => { /* Reuse your existing logic or I can fill if needed */ 
+    window.renderManageList = (s) => {
         const container = document.getElementById('manage-list-container');
         let search = (s || document.getElementById('manage-search').value).toLowerCase();
         container.innerHTML = '';
         let list = (manageType === 'CUSTOMER') ? CUSTOMER_DB.filter(c => c.location !== "Sundry Creditors") 
                  : (manageType === 'SELLER') ? CUSTOMER_DB.filter(c => c.location === "Sundry Creditors") 
                  : EMPLOYEE_DB;
-        
         list.filter(i => i.name.toLowerCase().includes(search)).sort((a,b)=>a.name.localeCompare(b.name)).forEach(item => {
             const div = document.createElement('div');
             div.className = 'manage-item';
@@ -827,7 +822,6 @@
         if(!confirm("Delete?")) return;
         const coll = type === 'EMPLOYEE' ? 'employees' : 'customers';
         await deleteDoc(doc(db, coll, id));
-        // Update local cache manually to save read
         if(type==='EMPLOYEE') EMPLOYEE_DB = EMPLOYEE_DB.filter(x=>x.id!==id);
         else CUSTOMER_DB = CUSTOMER_DB.filter(x=>x.id!==id);
         renderManageList();
@@ -849,48 +843,25 @@
 
     // --- MODAL FUNCTIONS ---
     window.viewBill = (id) => {
-        const log = allLogs.find(l => l.id === id);
+        const log = allLogs.find(l => l.id === id) || filteredLogs.find(l => l.id === id);
         if (!log || !log.items) { alert("No item details found for this log."); return; }
-
-        // 1. Fill Header Info
         document.getElementById('view-date').innerText = log.date_main || '-';
         document.getElementById('view-party').innerText = log.party || 'Generic';
         document.getElementById('view-type').innerText = log.payment_type || 'CASH';
         document.getElementById('view-status').innerHTML = (log.payment_type === 'CREDIT') 
-            ? (log.is_paid ? '<span style="color:green; font-weight:bold;">(PAID)</span>' : '<span style="color:red; font-weight:bold;">(UNPAID)</span>') 
-            : '';
-
-        // 2. Fill Table Rows
+            ? (log.is_paid ? '<span style="color:green; font-weight:bold;">(PAID)</span>' : '<span style="color:red; font-weight:bold;">(UNPAID)</span>') : '';
         const tbody = document.getElementById('view-bill-body');
         tbody.innerHTML = '';
-        
         log.items.forEach(item => {
             const rowTotal = (parseFloat(item.pcs) || 0) * (parseFloat(item.wsp) || 0);
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${item.barcode || '-'}</td>
-                <td>${item.art_no || '-'}</td>
-                <td>${item.name || '-'}</td>
-                <td>${item.size || '-'}</td>
-                <td>${item.color || '-'}</td>
-                <td>${item.mrp || '-'}</td>
-                <td>${item.pcs || '-'}</td>
-                <td>${item.wsp || '-'}</td>
-                <td><strong>${rowTotal.toFixed(2)}</strong></td>
-            `;
+            tr.innerHTML = `<td>${item.barcode || '-'}</td><td>${item.art_no || '-'}</td><td>${item.name || '-'}</td><td>${item.size || '-'}</td><td>${item.color || '-'}</td><td>${item.mrp || '-'}</td><td>${item.pcs || '-'}</td><td>${item.wsp || '-'}</td><td><strong>${rowTotal.toFixed(2)}</strong></td>`;
             tbody.appendChild(tr);
         });
-
-        // 3. Fill Footer
         document.getElementById('view-grand-total').innerText = log.amount || '0.00';
-
-        // 4. Show Modal
         document.getElementById('bill-modal').style.display = 'flex';
     };
-
-    window.closeBillModal = () => {
-        document.getElementById('bill-modal').style.display = 'none';
-    };
+    window.closeBillModal = () => { document.getElementById('bill-modal').style.display = 'none'; };
 
     // --- EXPORTS ---
     window.deleteItemLog = deleteItemLog;
@@ -909,6 +880,8 @@
     window.calcBillTotal = calcBillTotal;
     window.viewBill = viewBill;
     window.closeBillModal = closeBillModal;
+    window.applyFilters = applyFilters;
+    window.resetFilters = resetFilters;
 
 </script>
 </body>
