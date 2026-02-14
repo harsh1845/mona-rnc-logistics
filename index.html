@@ -422,12 +422,25 @@
     };
 
     // --- FORM RENDERING ---
+    // --- FORM RENDERING ---
     window.renderForm = (dataToFill = null) => {
         const container = document.getElementById('dynamic-fields');
         container.innerHTML = '';
         const isStaffEdit = (editingId !== null && !isAdmin);
         const staffAllowedFields = ['lr_no', 'transport_mode', 'remark', 'L/R_no', 'transport', 'signed_copy', 'delivery_type', 'is_paid', 'payment_type'];
         
+        // Define fields that should NOT be required
+        const optionalFields = [
+            'remark', 
+            'is_paid', 
+            'lr_no',           // Optional because it hides
+            'transport_mode',  // Optional because it hides
+            'signed_copy',     // Optional because it hides
+            'L/R_no', 
+            'against_bill', 
+            'credit_note_no'
+        ];
+
         // 1. Setup Datalists
         const dlContainer = document.createElement('div');
         dlContainer.style.display = 'none';
@@ -480,8 +493,14 @@
             // Event Listeners
             if (field.key === 'payment_type' || field.key === 'delivery_type') input.onchange = updateVisibility;
             
+            // Disable fields for staff if editing
             if (isStaffEdit && !staffAllowedFields.includes(field.key)) { input.disabled = true; input.style.backgroundColor = "#e5e7eb"; }
-            if(field.type !== 'checkbox' && field.key !== 'remark' && field.key !== 'is_paid') input.required = true;
+            
+            // CORRECTED REQUIRED LOGIC:
+            // Only require if it is NOT a checkbox AND NOT in the optional list
+            if(field.type !== 'checkbox' && !optionalFields.includes(field.key)) {
+                input.required = true;
+            }
 
             group.appendChild(input);
             container.appendChild(group);
@@ -497,7 +516,6 @@
             if(dataToFill && dataToFill.items) {
                 dataToFill.items.forEach(item => addBillRow(item));
             } else {
-                // Add 1 empty row by default
                 addBillRow(); 
             }
             calcBillTotal();
