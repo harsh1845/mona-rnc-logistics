@@ -274,7 +274,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { initializeFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, updateDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { initializeFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, deleteDoc, updateDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     // --- CONFIG ---
     const firebaseConfig = {
@@ -659,63 +659,85 @@
         const bill = document.getElementById('filter-bill').value.toLowerCase();
         const generic = document.getElementById('filter-generic').value.toLowerCase();
         const sortOrder = document.getElementById('filter-sort-order').value; // 'asc' or 'desc'
+        const countEl = document.getElementById('filter-count');
 
-        // 1. Build Query for Date Range & Sort (Firestore Optimization)
-        let q = collection(db, "logs");
-        
-        // Note: Firestore requires indexes for complex queries. For now, we fetch by date and filter rest in memory.
-        let queryConstraints = [orderBy("timestamp", sortOrder)];
-        
-        if (startDate) {
-            // Need to create Date objects for comparison
-            queryConstraints.push(orderBy("timestamp", sortOrder)); // Ensure ordered
-            // Client-side filtering is often safer for complex mixing without creating 50 indexes
+        countEl.innerText = 'Scanning...';
+        countEl.style.color = '#f59e0b';
+
+        try {
+            // 1. Page through the ENTIRE "logs" collection (not just a capped batch),
+            // so filtering/sorting covers every record no matter how old it is.
+            // Firestore can't do partial-text search server-side for party/bill/generic
+            // (and the date fields differ by log type), so this still has to be filtered
+            // in memory - but now over the full dataset, fetched in efficient batches via
+            // cursor pagination instead of one capped fetch.
+            const BATCH_SIZE = 500;
+            const SCAN_CAP = 50000; // safety ceiling so an extreme dataset can't hang the tab
+            let lastDoc = null;
+            let tempLogs = [];
+            let scanned = 0;
+            let hitCap = false;
+
+            while (true) {
+                const constraints = [orderBy("timestamp", sortOrder), limit(BATCH_SIZE)];
+                if (lastDoc) constraints.push(startAfter(lastDoc));
+                const snap = await getDocs(query(collection(db, "logs"), ...constraints));
+                if (snap.empty) break;
+
+                snap.forEach(doc => tempLogs.push({ id: doc.id, ...doc.data() }));
+                scanned += snap.size;
+                countEl.innerText = `Scanning... ${scanned} checked`;
+                lastDoc = snap.docs[snap.docs.length - 1];
+
+                if (snap.size < BATCH_SIZE) break; // reached the end of the collection
+                if (scanned >= SCAN_CAP) { hitCap = true; break; } // safety valve
+            }
+
+            // 2. Client-Side Filtering (identical logic to before, now applied to the full dataset)
+            filteredLogs = tempLogs.filter(log => {
+                // Date Filter
+                if (startDate || endDate) {
+                    // Determine the "main" date of the log
+                    const dateStr = log.date_bill || log.date_lr || log.date_main;
+                    if (!dateStr) return false;
+                    const logDate = new Date(dateStr);
+                    if (startDate && logDate < new Date(startDate)) return false;
+                    if (endDate && logDate > new Date(endDate)) return false;
+                }
+
+                // Type Filter
+                if (type !== 'ALL' && log.type !== type) return false;
+
+                // Party Filter
+                if (party) {
+                    const p = (log.party || log.brand || '').toLowerCase();
+                    if (!p.includes(party)) return false;
+                }
+
+                // Bill Filter
+                if (bill) {
+                    const b = (log.bill_no || log.against_bill || log.barcode || '').toLowerCase();
+                    if (!b.includes(bill)) return false;
+                }
+
+                // Generic Field Filter (Deep Search)
+                if (generic) {
+                    const fullStr = JSON.stringify(log).toLowerCase();
+                    if (!fullStr.includes(generic)) return false;
+                }
+
+                return true;
+            });
+
+            countEl.innerText = filteredLogs.length + (hitCap ? ' (partial - narrow your search)' : '');
+            countEl.style.color = hitCap ? '#f59e0b' : '#10b981'; 
+            renderTable();
+        } catch (error) {
+            console.error(error);
+            countEl.innerText = '0';
+            countEl.style.color = '#ef4444'; // red on error
+            alert("Filter error: " + error.message);
         }
-
-        // Fetching more logs for filtering (Limit increased)
-        const finalQuery = query(collection(db, "logs"), orderBy("timestamp", sortOrder), limit(200)); 
-        const snap = await getDocs(finalQuery);
-        let tempLogs = [];
-        snap.forEach(doc => tempLogs.push({ id: doc.id, ...doc.data() }));
-
-        // 2. Client-Side Filtering
-        filteredLogs = tempLogs.filter(log => {
-            // Date Filter
-            if (startDate || endDate) {
-                // Determine the "main" date of the log
-                const dateStr = log.date_bill || log.date_lr || log.date_main;
-                if (!dateStr) return false;
-                const logDate = new Date(dateStr);
-                if (startDate && logDate < new Date(startDate)) return false;
-                if (endDate && logDate > new Date(endDate)) return false;
-            }
-
-            // Type Filter
-            if (type !== 'ALL' && log.type !== type) return false;
-
-            // Party Filter
-            if (party) {
-                const p = (log.party || log.brand || '').toLowerCase();
-                if (!p.includes(party)) return false;
-            }
-
-            // Bill Filter
-            if (bill) {
-                const b = (log.bill_no || log.against_bill || log.barcode || '').toLowerCase();
-                if (!b.includes(bill)) return false;
-            }
-
-            // Generic Field Filter (Deep Search)
-            if (generic) {
-                const fullStr = JSON.stringify(log).toLowerCase();
-                if (!fullStr.includes(generic)) return false;
-            }
-
-            return true;
-        });
-
-        document.getElementById('filter-count').innerText = filteredLogs.length;
-        renderTable();
     };
 
     window.resetFilters = () => {
